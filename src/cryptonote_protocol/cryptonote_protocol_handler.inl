@@ -2854,20 +2854,20 @@ skip:
       return true;
     });
     const uint64_t previous_target = m_core.get_target_blockchain_height();
-    if (target < previous_target)
+    
+     if (target < previous_target && target > 0)
     {
       MINFO("Target height decreasing from " << previous_target << " to " << target);
       m_core.set_target_blockchain_height(target);
-      if (target == 0 && context.m_state > cryptonote_connection_context::state_before_handshake && !m_stopping)
-      {
-        MCWARNING("global", "dianstycoind is now disconnected from the network");
-        m_ask_for_txpool_complement = true;
-      }
+    }
+    else if (target == 0 && previous_target > 0)
+    {
+      MDEBUG("Not updating target height to 0 on connection close");
     }
 
-    m_block_queue.flush_spans(context.m_connection_id, false);
-    MLOG_PEER_STATE("closed");
-  }
+        m_block_queue.flush_spans(context.m_connection_id, false);
+        MLOG_PEER_STATE("closed");
+      }
 
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
