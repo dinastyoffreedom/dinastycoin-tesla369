@@ -1,5 +1,5 @@
+# Copyright (c) 2012-2025, The dinastycoin Project
 # Copyright (c) 2014-2024, The Monero Project
-#
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification, are
@@ -58,7 +58,7 @@ if (IOS)
     INCLUDE(CmakeLists_IOS.txt)
 endif()
 
-project(monero)
+project(dinastycoin)
 
 option (USE_CCACHE "Use ccache if a usable instance is found" ON)
 if (USE_CCACHE)
