@@ -248,22 +248,26 @@ namespace cryptonote
         const auto ms = dt.total_microseconds();
         if (ms > IDLE_PEER_KICK_TIME || (context.m_expect_response && ms > NON_RESPONSIVE_PEER_KICK_TIME))
         {
-          if (context.m_score-- >= 0)
-          {
-            MINFO(context << " kicking idle peer, last update " << (dt.total_microseconds() / 1.e6) << " seconds ago, expecting " << (int)context.m_expect_response);
-            context.m_last_request_time = boost::date_time::not_a_date_time;
-            context.m_expect_response = 0;
-            context.m_expect_height = 0;
-            context.m_requested_objects.clear();
-            context.m_state = cryptonote_connection_context::state_standby; // we'll go back to adding, then (if we can't), download
+ 
+        if (context.m_score >= 0)
+            {
+              MINFO(context << " kicking idle peer, last update " << (dt.total_microseconds() / 1.e6)
+                            << " seconds ago, expecting " << (int)context.m_expect_response);
+              context.m_last_request_time = boost::date_time::not_a_date_time;
+              context.m_expect_response = 0;
+              context.m_expect_height = 0;
+              context.m_requested_objects.clear();
+              context.m_state = cryptonote_connection_context::state_standby;
+            }
+            else
+            {
+              MINFO(context << "dropping idle peer with negative score");
+              // qui, se vuoi, puoi fare context.m_score--; ma è già negativo
+              drop_connection_with_score(context, context.m_expect_response == 0 ? 1 : 5, false);
+              return false;
+            }
+
           }
-          else
-          {
-            MINFO(context << "dropping idle peer with negative score");
-            drop_connection_with_score(context, context.m_expect_response == 0 ? 1 : 5, false);
-            return false;
-          }
-        }
       }
     }
 

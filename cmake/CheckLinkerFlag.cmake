@@ -6,8 +6,8 @@ macro(CHECK_LINKER_FLAG flag VARIABLE)
       message(STATUS "Looking for ${flag} linker flag")
     endif()
 
-    set(_cle_source ${monero_SOURCE_DIR}/cmake/CheckLinkerFlag.c)
-
+     
+    set(_cle_source ${CMAKE_SOURCE_DIR}/cmake/CheckLinkerFlag.c)
     set(saved_CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
     set(CMAKE_C_FLAGS "${flag}")
     try_compile(${VARIABLE}
