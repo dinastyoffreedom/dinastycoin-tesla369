@@ -407,6 +407,8 @@ namespace nodetool
   {
     if(!address.is_blockable())
       return false;
+    if (is_priority_node(address))
+      return false;
 
     CRITICAL_REGION_LOCAL(m_host_fails_score_lock);
     uint64_t fails = m_host_fails_score[address.host_str()] += score;
