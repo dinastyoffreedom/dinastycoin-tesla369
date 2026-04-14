@@ -2217,8 +2217,16 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
 
       return r;
     }
-    else if(main_chain_cumulative_difficulty < bei.cumulative_difficulty) //check if difficulty bigger then in main chain
+   else if(main_chain_cumulative_difficulty < bei.cumulative_difficulty) //check if difficulty bigger then in main chain
     {
+      // Evita reorg ping-pong su fork di 1 blocco: aspetta che l'alt chain abbia almeno 2 blocchi
+      if (alt_chain.size() <= 1)
+      {
+        MGINFO_BLUE("----- ALT CHAIN (size 1) has higher cumulative difficulty, but delaying reorg to avoid ping-pong at height "
+          << bei.height << " (main cumdiff " << main_chain_cumulative_difficulty << ", alt cumdiff " << bei.cumulative_difficulty << ")");
+        return true;
+      }
+
       //do reorganize!
       MGINFO_GREEN("###### REORGANIZE on height: " << alt_chain.front().height << " of " << m_db->height() - 1 << " with cum_difficulty " << m_db->get_block_cumulative_difficulty(m_db->height() - 1) << std::endl << " alternative blockchain size: " << alt_chain.size() << " with cum_difficulty " << bei.cumulative_difficulty);
 
