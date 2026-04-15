@@ -418,7 +418,11 @@ namespace nodetool
     CRITICAL_REGION_LOCAL(m_host_fails_score_lock);
     uint64_t fails = m_host_fails_score[address.host_str()] += score;
     MDEBUG("Host " << address.host_str() << " fail score=" << fails);
-    if(fails > P2P_IP_FAILS_BEFORE_BLOCK)
+    // Dinastycoin sync stability:
+    // be less aggressive on host auto-blocking to avoid false positives during long sync
+    // (transient peers, temporary timeouts, stripe churn). Keep the mechanism, but only
+    // block after a significantly higher cumulative score.
+    if(fails > (P2P_IP_FAILS_BEFORE_BLOCK * 3))
     {
       auto it = m_host_fails_score.find(address.host_str());
       CHECK_AND_ASSERT_MES(it != m_host_fails_score.end(), false, "internal error");

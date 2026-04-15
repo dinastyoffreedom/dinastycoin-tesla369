@@ -80,7 +80,7 @@
 #define PASSIVE_PEER_KICK_TIME (60 * 1000000) // microseconds
 #define DROP_ON_SYNC_WEDGE_THRESHOLD (30 * 1000000000ull) // nanoseconds
 #define LAST_ACTIVITY_STALL_THRESHOLD (2.0f) // seconds
-#define DROP_PEERS_ON_SCORE -2
+#define DROP_PEERS_ON_SCORE -20
 
 namespace cryptonote
 {
@@ -261,9 +261,16 @@ namespace cryptonote
             }
             else
             {
-              MINFO(context << "dropping idle peer with negative score");
-              drop_connection_with_score(context, context.m_expect_response == 0 ? 1 : 5, false);
-              return false;
+              // Dinastycoin sync stability: avoid false-positive disconnects during long sync.
+              // Some valid peers can temporarily accumulate negative score while still being useful.
+              // Move peer back to standby instead of hard-dropping on score alone.
+              MINFO(context << "idle peer has negative score, keeping connection and resetting request state");
+              context.m_score = 0;
+              context.m_last_request_time = boost::date_time::not_a_date_time;
+              context.m_expect_response = 0;
+              context.m_expect_height = 0;
+              context.m_requested_objects.clear();
+              context.m_state = cryptonote_connection_context::state_standby;
             }
 
           }
