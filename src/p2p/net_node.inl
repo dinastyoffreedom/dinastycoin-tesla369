@@ -419,15 +419,15 @@ namespace nodetool
     uint64_t fails = m_host_fails_score[address.host_str()] += score;
     MDEBUG("Host " << address.host_str() << " fail score=" << fails);
     // Dinastycoin sync stability:
-    // be less aggressive on host auto-blocking to avoid false positives during long sync
-    // (transient peers, temporary timeouts, stripe churn). Keep the mechanism, but only
-    // block after a significantly higher cumulative score.
+    // during long sync we observed false-positive auto blocks of valid peers/seeds.
+    // Keep fail accounting, but disable automatic host block from score escalation.
+    // Manual blocklist/DNS blocklist paths still use block_host directly.
     if(fails > (P2P_IP_FAILS_BEFORE_BLOCK * 3))
     {
       auto it = m_host_fails_score.find(address.host_str());
       CHECK_AND_ASSERT_MES(it != m_host_fails_score.end(), false, "internal error");
       it->second = P2P_IP_FAILS_BEFORE_BLOCK/2;
-      block_host(address);
+      MINFO("Host " << address.host_str() << " reached fail threshold but auto-block is disabled for sync stability");
     }
     return true;
   }
@@ -2767,7 +2767,12 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::is_priority_node(const epee::net_utils::network_address& na)
   {
-    return (std::find(m_priority_peers.begin(), m_priority_peers.end(), na) != m_priority_peers.end()) || (std::find(m_exclusive_peers.begin(), m_exclusive_peers.end(), na) != m_exclusive_peers.end());
+    const auto same_host = [&na](const epee::net_utils::network_address &peer) {
+      return peer == na || peer.is_same_host(na);
+    };
+
+    return std::find_if(m_priority_peers.begin(), m_priority_peers.end(), same_host) != m_priority_peers.end()
+      || std::find_if(m_exclusive_peers.begin(), m_exclusive_peers.end(), same_host) != m_exclusive_peers.end();
   }
 
   template<class t_payload_net_handler>
@@ -2778,13 +2783,15 @@ namespace nodetool
 
     for (const auto& peer : m_command_line_peers)
     {
-      if (peer.adr == na)
+      if (peer.adr == na || peer.adr.is_same_host(na))
         return true;
     }
 
     for (const auto& zone_it : m_network_zones)
     {
-      if (std::find(zone_it.second.m_seed_nodes.begin(), zone_it.second.m_seed_nodes.end(), na) != zone_it.second.m_seed_nodes.end())
+      if (std::find_if(zone_it.second.m_seed_nodes.begin(), zone_it.second.m_seed_nodes.end(),
+            [&na](const epee::net_utils::network_address &seed){ return seed == na || seed.is_same_host(na); })
+          != zone_it.second.m_seed_nodes.end())
         return true;
     }
 
