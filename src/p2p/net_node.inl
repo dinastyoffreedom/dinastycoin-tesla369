@@ -249,6 +249,11 @@ namespace nodetool
   {
     if(!addr.is_blockable())
       return false;
+    if (is_protected_peer(addr))
+    {
+      MINFO("Refusing to block protected peer " << addr.str());
+      return false;
+    }
 
     const time_t now = time(nullptr);
     bool added = false;
@@ -407,7 +412,7 @@ namespace nodetool
   {
     if(!address.is_blockable())
       return false;
-    if (is_priority_node(address))
+    if (is_protected_peer(address))
       return false;
 
     CRITICAL_REGION_LOCAL(m_host_fails_score_lock);
@@ -2761,6 +2766,27 @@ namespace nodetool
     return (std::find(m_priority_peers.begin(), m_priority_peers.end(), na) != m_priority_peers.end()) || (std::find(m_exclusive_peers.begin(), m_exclusive_peers.end(), na) != m_exclusive_peers.end());
   }
 
+  template<class t_payload_net_handler>
+  bool node_server<t_payload_net_handler>::is_protected_peer(const epee::net_utils::network_address& na)
+  {
+    if (is_priority_node(na))
+      return true;
+
+    for (const auto& peer : m_command_line_peers)
+    {
+      if (peer.adr == na)
+        return true;
+    }
+
+    for (const auto& zone_it : m_network_zones)
+    {
+      if (std::find(zone_it.second.m_seed_nodes.begin(), zone_it.second.m_seed_nodes.end(), na) != zone_it.second.m_seed_nodes.end())
+        return true;
+    }
+
+    return false;
+  }
+
   template<class t_payload_net_handler> template <class Container>
   bool node_server<t_payload_net_handler>::connect_to_peerlist(const Container& peers)
   {
@@ -2948,7 +2974,7 @@ namespace nodetool
         count++;
 
         // the only call location happens BEFORE foreach_connection list is updated
-        if (count >= max_connections) {
+        if (count > max_connections) {
           return false;
         }
       }
@@ -2956,7 +2982,7 @@ namespace nodetool
       return true;
     });
     // the only call location happens BEFORE foreach_connection list is updated
-    return count >= max_connections;
+    return count > max_connections;
   }
 
   template<class t_payload_net_handler>
@@ -2965,11 +2991,19 @@ namespace nodetool
     if (m_offline) return true;
     if (!m_exclusive_peers.empty()) return true;
 
-    for (auto& zone : m_network_zones)
+    bool needs_sync_connections = false;
+    for (const auto& zone : m_network_zones)
     {
       if (m_payload_handler.needs_new_sync_connections(zone.first))
-        continue;
+      {
+        needs_sync_connections = true;
+        break;
+      }
+    }
+    if (needs_sync_connections) return true;
 
+    for (auto& zone : m_network_zones)
+    {
       if (zone.second.m_net_server.is_stop_signal_sent())
         return false;
 

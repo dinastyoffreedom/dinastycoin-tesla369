@@ -396,6 +396,7 @@ namespace nodetool
     void record_addr_failed(const epee::net_utils::network_address& addr);
     bool is_addr_recently_failed(const epee::net_utils::network_address& addr);
     bool is_priority_node(const epee::net_utils::network_address& na);
+    bool is_protected_peer(const epee::net_utils::network_address& na);
     std::set<std::string> get_ip_seed_nodes() const;
     std::set<std::string> get_dns_seed_nodes();
     std::set<std::string> get_seed_nodes(epee::net_utils::zone);

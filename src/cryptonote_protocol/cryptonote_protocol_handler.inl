@@ -249,7 +249,7 @@ namespace cryptonote
         if (ms > IDLE_PEER_KICK_TIME || (context.m_expect_response && ms > NON_RESPONSIVE_PEER_KICK_TIME))
         {
  
-        if (context.m_score >= 0)
+        if (context.m_score-- >= 0)
             {
               MINFO(context << " kicking idle peer, last update " << (dt.total_microseconds() / 1.e6)
                             << " seconds ago, expecting " << (int)context.m_expect_response);
@@ -262,7 +262,6 @@ namespace cryptonote
             else
             {
               MINFO(context << "dropping idle peer with negative score");
-              // qui, se vuoi, puoi fare context.m_score--; ma è già negativo
               drop_connection_with_score(context, context.m_expect_response == 0 ? 1 : 5, false);
               return false;
             }
@@ -452,6 +451,10 @@ namespace cryptonote
       return true;
 
     // from v6, if the peer advertises a top block version, reject if it's not what it should be (will only work if no voting)
+    // Dinastycoin note:
+    // Being too strict here can cause sync stalls on fresh nodes during/around HF transitions
+    // when peers are briefly inconsistent in advertised top_version. We keep the check for
+    // visibility (warning), but do not hard-drop the peer only for this mismatch.
     if (hshd.current_height > 0)
     {
       const uint8_t version = m_core.get_ideal_hard_fork_version(hshd.current_height - 1);
@@ -461,7 +464,10 @@ namespace cryptonote
           MDEBUG(context << " peer claims higher version than we think (" <<
               (unsigned)hshd.top_version << " for " << (hshd.current_height - 1) << " instead of " << (unsigned)version <<
               ") - we may be forked from the network and a software upgrade may be needed, or that peer is broken or malicious");
-        return false;
+        else
+          MWARNING(context << " peer top_version mismatch (peer=" << (unsigned)hshd.top_version
+            << ", expected=" << (unsigned)version << " at height " << (hshd.current_height - 1)
+            << "), keeping peer to avoid false-positive sync stalls");
       }
     }
 
