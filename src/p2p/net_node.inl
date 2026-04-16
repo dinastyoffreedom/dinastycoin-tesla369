@@ -412,22 +412,18 @@ namespace nodetool
   {
     if(!address.is_blockable())
       return false;
-    if (is_protected_peer(address))
-      return false;
+     
 
     CRITICAL_REGION_LOCAL(m_host_fails_score_lock);
     uint64_t fails = m_host_fails_score[address.host_str()] += score;
     MDEBUG("Host " << address.host_str() << " fail score=" << fails);
-    // Dinastycoin sync stability:
-    // during long sync we observed false-positive auto blocks of valid peers/seeds.
-    // Keep fail accounting, but disable automatic host block from score escalation.
-    // Manual blocklist/DNS blocklist paths still use block_host directly.
+     
     if(fails > (P2P_IP_FAILS_BEFORE_BLOCK * 3))
     {
       auto it = m_host_fails_score.find(address.host_str());
       CHECK_AND_ASSERT_MES(it != m_host_fails_score.end(), false, "internal error");
       it->second = P2P_IP_FAILS_BEFORE_BLOCK/2;
-      MINFO("Host " << address.host_str() << " reached fail threshold but auto-block is disabled for sync stability");
+       block_host(address);
     }
     return true;
   }
@@ -872,9 +868,34 @@ namespace nodetool
   template<class t_payload_net_handler>
   std::set<std::string> node_server<t_payload_net_handler>::get_seed_nodes(epee::net_utils::zone zone)
   {
-    if (zone == epee::net_utils::zone::public_)
+     switch (zone)
+    {
+    case epee::net_utils::zone::public_:
       return get_dns_seed_nodes();
-    return {};
+    case epee::net_utils::zone::tor:
+      if (m_nettype == cryptonote::MAINNET)
+      {
+        return {
+          "xwvz3ekocr3dkyxfkmgm2hvbpzx2ysqmaxgter7znnqrhoicygkfswid.onion:18083",
+          "4pixvbejrvihnkxmduo2agsnmc3rrulrqc7s3cbwwrep6h6hrzsibeqd.onion:18083",
+          "zbjkbsxc5munw3qusl7j2hpcmikhqocdf4pqhnhtpzw5nt5jrmofptid.onion:18083",
+          "qz43zul2x56jexzoqgkx2trzwcfnr6l3hbtfcfx54g4r3eahy3bssjyd.onion:18083",
+        };
+      }
+      return {};
+    case epee::net_utils::zone::i2p:
+      if (m_nettype == cryptonote::MAINNET)
+      {
+        return {
+          "s3l6ke4ed3df466khuebb4poienoingwof7oxtbo6j4n56sghe3a.b32.i2p:37175",
+          "sel36x6fibfzujwvt4hf5gxolz6kd3jpvbjqg6o3ud2xtionyl2q.b32.i2p:37175"
+        };
+      }
+      return {};
+    default:
+      break;
+    }
+    throw std::logic_error{"Bad zone given to get_seed_nodes"};
   }
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
@@ -1496,19 +1517,15 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::is_addr_recently_failed(const epee::net_utils::network_address& addr)
   {
-    // Never suppress retries for protected peers (priority/exclusive/seed/CLI peers)
-    // otherwise sync can stall until restart when cache is reset.
-    if (is_protected_peer(addr))
-      return false;
+     
 
     CRITICAL_REGION_LOCAL(m_conn_fails_cache_lock);
     auto it = m_conn_fails_cache.find(addr.host_str());
     if(it == m_conn_fails_cache.end())
       return false;
 
-    // Keep retry backoff short to avoid long sync stalls after transient failures.
-    static constexpr time_t RETRY_COOLDOWN_SECONDS = 60;
-    if(time(NULL) - it->second > RETRY_COOLDOWN_SECONDS)
+  
+    if(time(NULL) - it->second > P2P_FAILED_ADDR_FORGET_SECONDS)
       return false;
     else
       return true;
@@ -2775,12 +2792,10 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::is_priority_node(const epee::net_utils::network_address& na)
   {
-    const auto same_host = [&na](const epee::net_utils::network_address &peer) {
-      return peer == na || peer.is_same_host(na);
-    };
+     
+    return (std::find(m_priority_peers.begin(), m_priority_peers.end(), na) != m_priority_peers.end()) || (std::find(m_exclusive_peers.begin(), m_exclusive_peers.end(), na) != m_exclusive_peers.end());
 
-    return std::find_if(m_priority_peers.begin(), m_priority_peers.end(), same_host) != m_priority_peers.end()
-      || std::find_if(m_exclusive_peers.begin(), m_exclusive_peers.end(), same_host) != m_exclusive_peers.end();
+
   }
 
   template<class t_payload_net_handler>

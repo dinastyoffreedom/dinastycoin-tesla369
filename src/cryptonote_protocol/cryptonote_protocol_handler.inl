@@ -80,7 +80,7 @@
 #define PASSIVE_PEER_KICK_TIME (60 * 1000000) // microseconds
 #define DROP_ON_SYNC_WEDGE_THRESHOLD (30 * 1000000000ull) // nanoseconds
 #define LAST_ACTIVITY_STALL_THRESHOLD (2.0f) // seconds
-#define DROP_PEERS_ON_SCORE -20
+#define DROP_PEERS_ON_SCORE -2
 
 namespace cryptonote
 {
