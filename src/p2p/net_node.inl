@@ -249,11 +249,6 @@ namespace nodetool
   {
     if(!addr.is_blockable())
       return false;
-    if (is_protected_peer(addr))
-    {
-      MINFO("Refusing to block protected peer " << addr.str());
-      return false;
-    }
 
     const time_t now = time(nullptr);
     bool added = false;
@@ -417,13 +412,12 @@ namespace nodetool
     CRITICAL_REGION_LOCAL(m_host_fails_score_lock);
     uint64_t fails = m_host_fails_score[address.host_str()] += score;
     MDEBUG("Host " << address.host_str() << " fail score=" << fails);
-     
-    if(fails > (P2P_IP_FAILS_BEFORE_BLOCK * 3))
+    if(fails > P2P_IP_FAILS_BEFORE_BLOCK)
     {
       auto it = m_host_fails_score.find(address.host_str());
       CHECK_AND_ASSERT_MES(it != m_host_fails_score.end(), false, "internal error");
       it->second = P2P_IP_FAILS_BEFORE_BLOCK/2;
-       block_host(address);
+      block_host(address);
     }
     return true;
   }
