@@ -872,7 +872,8 @@ namespace nodetool
   template<class t_payload_net_handler>
   std::set<std::string> node_server<t_payload_net_handler>::get_seed_nodes(epee::net_utils::zone zone)
   {
-    // TODO: add Dinastycoin seed nodes
+    if (zone == epee::net_utils::zone::public_)
+      return get_dns_seed_nodes();
     return {};
   }
   //-----------------------------------------------------------------------------------
@@ -1495,12 +1496,19 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::is_addr_recently_failed(const epee::net_utils::network_address& addr)
   {
+    // Never suppress retries for protected peers (priority/exclusive/seed/CLI peers)
+    // otherwise sync can stall until restart when cache is reset.
+    if (is_protected_peer(addr))
+      return false;
+
     CRITICAL_REGION_LOCAL(m_conn_fails_cache_lock);
     auto it = m_conn_fails_cache.find(addr.host_str());
     if(it == m_conn_fails_cache.end())
       return false;
 
-    if(time(NULL) - it->second > P2P_FAILED_ADDR_FORGET_SECONDS)
+    // Keep retry backoff short to avoid long sync stalls after transient failures.
+    static constexpr time_t RETRY_COOLDOWN_SECONDS = 60;
+    if(time(NULL) - it->second > RETRY_COOLDOWN_SECONDS)
       return false;
     else
       return true;
