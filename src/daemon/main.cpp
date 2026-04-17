@@ -28,6 +28,10 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
+#ifdef WIN32
+#include <windows.h>
+#endif
+
 #include "common/command_line.h"
 #include "common/scoped_message_writer.h"
 #include "common/password.h"
@@ -129,6 +133,26 @@ int main(int argc, char const * argv[])
     // TODO parse the debug options like set log level right here at start
 
     tools::on_startup();
+
+#ifdef WIN32
+    // Disable Quick Edit Mode: prevents Windows from pausing the ENTIRE PROCESS
+    // when the user clicks in the console window (common issue when launched from GUI).
+    // Without this, any click in the CMD window blocks all log output and p2p threads.
+    // ENABLE_QUICK_EDIT_MODE = 0x0020
+    {
+      HANDLE hStdinQE = GetStdHandle(STD_INPUT_HANDLE);
+      if (hStdinQE != INVALID_HANDLE_VALUE) {
+        DWORD modeQE = 0;
+        if (GetConsoleMode(hStdinQE, &modeQE)) {
+          // 0x0020 = ENABLE_QUICK_EDIT_MODE
+          modeQE &= ~0x0020;
+          // 0x0100 = ENABLE_EXTENDED_FLAGS
+          modeQE |= 0x0100;
+          SetConsoleMode(hStdinQE, modeQE);
+        }
+      }
+    }
+#endif
 
     epee::string_tools::set_module_name_and_folder(argv[0]);
 

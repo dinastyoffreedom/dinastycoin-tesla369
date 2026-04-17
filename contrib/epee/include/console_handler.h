@@ -26,6 +26,10 @@
 
 #pragma once
 
+#ifdef WIN32
+#include <windows.h>
+#endif
+
 #include "misc_log_ex.h"
 #include "string_tools.h"
 #include <atomic>
@@ -196,13 +200,45 @@ namespace epee
         if (m_read_status == state_cancelled)
           return false;
 
-        DWORD retval = ::WaitForSingleObject(::GetStdHandle(STD_INPUT_HANDLE), 100);
+        HANDLE hConIn = ::GetStdHandle(STD_INPUT_HANDLE);
+        DWORD retval = ::WaitForSingleObject(hConIn, 100);
         switch (retval)
         {
           case WAIT_FAILED:
             return false;
           case WAIT_OBJECT_0:
+          {
+            // Filter out non-keyboard events (mouse clicks, resize, focus changes)
+            // WaitForSingleObject returns WAIT_OBJECT_0 for ANY console event,
+            // but std::getline only reads keyboard input. Without filtering,
+            // getline blocks when mouse events are in the queue.
+            DWORD nEvents = 0;
+            if (!::GetNumberOfConsoleInputEvents(hConIn, &nEvents) || nEvents == 0)
+              break;
+            INPUT_RECORD irBuf[64];
+            DWORD nRead = 0;
+            if (::PeekConsoleInputA(hConIn, irBuf, (nEvents < 64 ? nEvents : 64), &nRead))
+            {
+              bool hasKey = false;
+              for (DWORD i = 0; i < nRead; i++)
+              {
+                if (irBuf[i].EventType == KEY_EVENT
+                    && irBuf[i].Event.KeyEvent.bKeyDown
+                    && irBuf[i].Event.KeyEvent.wVirtualKeyCode != 0)
+                {
+                  hasKey = true;
+                  break;
+                }
+              }
+              if (!hasKey)
+              {
+                // Scarta tutti gli eventi non-tastiera
+                ::FlushConsoleInputBuffer(hConIn);
+                break; // Torna al while loop (100ms timeout)
+              }
+            }
             return true;
+          }
           default:
             break;
         }

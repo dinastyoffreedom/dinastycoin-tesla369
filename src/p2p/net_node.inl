@@ -66,7 +66,29 @@
 #undef DINASTYCOIN_DEFAULT_LOG_CATEGORY
 #define DINASTYCOIN_DEFAULT_LOG_CATEGORY "net.p2p"
 
-#define MIN_WANTED_SEED_NODES 12
+#define MIN_WANTED_SEED_NODES 2
+
+// =====================================================================
+// Seed whitelist: i seed ufficiali Dinastycoin non vengono mai bannati.
+// Questo protegge da block_host() e add_host_fail() involontari.
+// =====================================================================
+namespace {
+  bool is_seed_whitelisted(const std::string& host_str) {
+    static const std::set<std::string> SEED_WHITELIST = {
+      // Hostnames ufficiali
+      "seed1.dinastycoin.com",
+      "seed2.dinastycoin.com",
+      "seed3.dinastycoin.com",
+      "seed4.dinastycoin.com",
+      // IP noti dei seed (seed1=3.8.236.183, seed2=35.176.51.4, seed3=3.9.137.162)
+      "3.8.236.183",
+      "35.176.51.4",
+      "3.9.137.162",
+      "3.9.175.195"
+    };
+    return SEED_WHITELIST.count(host_str) > 0;
+  }
+} // namespace anonymous
 
 static inline boost::asio::ip::address_v4 make_address_v4_from_v6(const boost::asio::ip::address_v6& a)
 {
@@ -250,6 +272,13 @@ namespace nodetool
     if(!addr.is_blockable())
       return false;
 
+// Seed whitelist: non bloccare mai i seed ufficiali Dinastycoin
+   const std::string wl_check = addr.host_str();
+   if (is_seed_whitelisted(wl_check)) {
+     MINFO("Seed whitelisted, skipping block: host=" << wl_check);
+     return false;
+   }
+
     const time_t now = time(nullptr);
     bool added = false;
 
@@ -342,6 +371,21 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::block_subnet(const epee::net_utils::ipv4_network_subnet &subnet, time_t seconds)
   {
+    // Seed whitelist: non bloccare subnet che coprono IP dei seed ufficiali
+   static const std::vector<std::string> seed_ips_wl = {
+     "3.8.236.183", "35.176.51.4", "3.9.137.162", "3.9.175.195"
+   };
+   for (const auto &ip_str : seed_ips_wl) {
+     uint32_t ip = 0;
+     if (epee::string_tools::get_ip_int32_from_string(ip, ip_str)) {
+       epee::net_utils::ipv4_network_address seed_addr{ip, 0};
+       if (subnet.matches(seed_addr)) {
+         MWARNING("Seed whitelisted, skipping subnet block: "
+                  << subnet.host_str() << " covers seed IP " << ip_str);
+         return false;
+       }
+     }
+   }
     const time_t now = time(nullptr);
 
     CRITICAL_REGION_LOCAL(m_blocked_hosts_lock);
@@ -408,8 +452,13 @@ namespace nodetool
     if(!address.is_blockable())
       return false;
      
+// Seed whitelist: non accumulare fail score per i seed ufficiali
+   if (is_seed_whitelisted(address.host_str())) {
+     MINFO("Seed whitelisted, skipping fail count: host=" << address.host_str());
+     return false;
+   }
 
-    CRITICAL_REGION_LOCAL(m_host_fails_score_lock);
+   CRITICAL_REGION_LOCAL(m_host_fails_score_lock);
     uint64_t fails = m_host_fails_score[address.host_str()] += score;
     MDEBUG("Host " << address.host_str() << " fail score=" << fails);
     if(fails > P2P_IP_FAILS_BEFORE_BLOCK)

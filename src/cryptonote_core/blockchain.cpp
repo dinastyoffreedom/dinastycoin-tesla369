@@ -444,27 +444,16 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
     m_long_term_block_weights_cache_rolling_median = epee::misc_utils::rolling_median_t<uint64_t>(m_long_term_block_weights_window);
   }
 
-  bool difficulty_ok;
-  uint64_t difficulty_recalc_height;
-  std::tie(difficulty_ok, difficulty_recalc_height) = check_difficulty_checkpoints();
-  if (!difficulty_ok)
-  {
-    MERROR("Difficulty drift detected!");
- const uint64_t hf_height_tesla369 =   
-    (m_nettype == cryptonote::MAINNET) ? HF_HEIGHT_TESLA369_MAINNET :
-    (m_nettype == cryptonote::TESTNET) ? HF_HEIGHT_TESLA369_TESTNET :
-    (m_nettype == cryptonote::STAGENET) ? HF_HEIGHT_TESLA369_STAGENET :
-                                         HF_HEIGHT_TESLA369_MAINNET;
-
-  // Ricalcolo SOLO dopo TESLA369 e SOLO se richiesto esplicitamente
-  if (m_db->height() >= hf_height_tesla369)
-  {
-    MERROR("Fixing difficulty DB (requested) from height " << difficulty_recalc_height
-           << " to height " << (m_db->height() - 1));
-    recalculate_difficulties(difficulty_recalc_height);
-  }
- 
-  }
+bool difficulty_ok;
+uint64_t difficulty_recalc_height;
+std::tie(difficulty_ok, difficulty_recalc_height) = check_difficulty_checkpoints();
+if (!difficulty_ok)
+{
+  MERROR("Difficulty drift detected!");
+  MERROR("Fixing difficulty DB (requested) from height " << difficulty_recalc_height
+         << " to height " << (m_db->height() - 1));
+  recalculate_difficulties(difficulty_recalc_height);
+}
 
   {
     db_txn_guard txn_guard(m_db, m_db->is_read_only());
