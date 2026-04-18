@@ -76,11 +76,11 @@
 #define REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY (5 * 1000000) // microseconds
 #define REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD (30 * 1000000) // microseconds
 #define IDLE_PEER_KICK_TIME (240 * 1000000) // microseconds
-#define NON_RESPONSIVE_PEER_KICK_TIME (20 * 1000000) // microseconds
+#define NON_RESPONSIVE_PEER_KICK_TIME (60 * 1000000) // microseconds (increased from 20s: seeds may be slow to respond while adding blocks)
 #define PASSIVE_PEER_KICK_TIME (60 * 1000000) // microseconds
 #define DROP_ON_SYNC_WEDGE_THRESHOLD (30 * 1000000000ull) // nanoseconds
 #define LAST_ACTIVITY_STALL_THRESHOLD (2.0f) // seconds
-#define DROP_PEERS_ON_SCORE -2
+#define DROP_PEERS_ON_SCORE -4 // increased from -2: allow more standby cycles before permanent drop
 
 namespace cryptonote
 {
@@ -2307,7 +2307,9 @@ skip:
         return true;
       }
 
-      // we can do nothing, so drop this peer to make room for others unless we think we've downloaded all we need
+      // we can do nothing - but don't drop the peer immediately:
+      // spans may already be reserved by other peers (m_sync_lock contention during initial sync).
+      // Instead, go to standby so check_standby_peers() wakes us in ~1s when spans become available.
       const uint64_t blockchain_height = m_core.get_current_blockchain_height();
       if (std::max(blockchain_height, m_block_queue.get_next_needed_height(blockchain_height)) >= m_core.get_target_blockchain_height())
       {
@@ -2315,8 +2317,10 @@ skip:
         MLOG_PEER_STATE("Nothing to do for now, switching to normal state");
         return true;
       }
-      MLOG_PEER_STATE("We can download nothing from this peer, dropping");
-      return false;
+      // Spans reserved by other peers - pause instead of dropping (fix sync loop regression)
+      MLOG_PEER_STATE("No span available to download (reserved by other peers), pausing");
+      context.m_state = cryptonote_connection_context::state_standby;
+      return true;
     }
 
 skip:
