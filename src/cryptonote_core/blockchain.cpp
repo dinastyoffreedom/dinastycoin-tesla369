@@ -963,18 +963,53 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
   }
   else
   {
-    // TESLA369+: Monero-modern target selection
+    // TESLA369+: use LWMA (next_difficulty_13) for stability.
+    // ROOT CAUSE FIX: the old next_difficulty algo is designed for a 720-block window;
+    // when called with only DIFFICULTY_BLOCKS_COUNT_V13=31 entries it produces extreme
+    // volatility (spike 3381 → collapse 87 → block storm 1-5s). LWMA handles short
+    // windows correctly and the solvetime clamp neutralises long gaps (hours without blocks).
     const uint8_t hf_ideal = get_ideal_hard_fork_version(height);
     const size_t target_post = (hf_ideal < 2) ? DIFFICULTY_TARGET_V1 : DIFFICULTY_TARGET_V2;
 
-    diff = next_difficulty(timestamps, difficulties, target_post);
+    diff = next_difficulty_13(timestamps, difficulties, target_post);
 
-    //if (height >= 152495 && height <= 152505)
-      MINFO("diff calc debug: next height " << height
-            << ", hf_ideal " << (int)hf_ideal
-            << ", target " << target_post
-            << ", timestamps " << timestamps.size()
-            << ", diffs " << difficulties.size());
+    // Rate-limit safety net: cap per-block difficulty change at ±50%.
+    // LWMA already provides smooth control; this is a hard backstop against
+    // pathological edge cases (e.g. the first block after the TESLA369 height
+    // transition when the window is not yet fully filled by LWMA blocks).
+    if (difficulties.size() >= 2)
+    {
+      const difficulty_type prev_block_diff =
+          difficulties.back() - difficulties[difficulties.size() - 2];
+      if (prev_block_diff > 0)
+      {
+        // +50% ceiling
+        const difficulty_type max_allowed = prev_block_diff + prev_block_diff / 2;
+        // -50% floor (cannot go below DIFFICULTY_MINIMUM_FLOOR enforced in next_difficulty_13)
+        const difficulty_type min_allowed = (prev_block_diff > 1) ? (prev_block_diff / 2) : 1;
+        if (diff > max_allowed)
+        {
+          MWARNING("Retarget rate-limit (upper): height=" << height
+                   << " raw_diff=" << diff << " capped to " << max_allowed
+                   << " (prev_block_diff=" << prev_block_diff << ")");
+          diff = max_allowed;
+        }
+        if (diff < min_allowed)
+        {
+          MWARNING("Retarget rate-limit (lower): height=" << height
+                   << " raw_diff=" << diff << " raised to " << min_allowed
+                   << " (prev_block_diff=" << prev_block_diff << ")");
+          diff = min_allowed;
+        }
+      }
+    }
+
+    MINFO("diff calc debug (LWMA): next height " << height
+          << ", hf_ideal " << (int)hf_ideal
+          << ", target " << target_post
+          << ", timestamps " << timestamps.size()
+          << ", diffs " << difficulties.size()
+          << ", diff " << diff);
   }
 
   //if (height >= 152495 && height <= 152505)
@@ -1387,8 +1422,19 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
     }
     else
     {
-      // Post-HF14: use tesla369 logic (always next_difficulty)
-      return next_difficulty(timestamps, cumulative_difficulties, target);
+      // Post-TESLA369: use LWMA (next_difficulty_13) for stability (mirrors fix in get_difficulty_for_next_block).
+      // The old next_difficulty is designed for a 720-block window; with DIFFICULTY_BLOCKS_COUNT_V13=31
+      // entries it produces extreme volatility. Trim vectors to the last 31 entries (most recent),
+      // since next_difficulty_13 internally resizes keeping the FIRST entries, not the last.
+      const size_t lwma_count = static_cast<size_t>(DIFFICULTY_BLOCKS_COUNT_V13);
+      if (timestamps.size() > lwma_count)
+      {
+        const size_t excess = timestamps.size() - lwma_count;
+        timestamps.erase(timestamps.begin(), timestamps.begin() + excess);
+        cumulative_difficulties.erase(cumulative_difficulties.begin(),
+                                      cumulative_difficulties.begin() + excess);
+      }
+      return next_difficulty_13(timestamps, cumulative_difficulties, target);
     }
 
 }

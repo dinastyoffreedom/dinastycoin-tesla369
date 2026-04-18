@@ -249,7 +249,8 @@ namespace cryptonote {
 
     const int64_t T = static_cast<int64_t>(target_seconds);
     size_t N = DIFFICULTY_WINDOW_V13;
-    int64_t FTL = static_cast<int64_t>(CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT);
+    // FTL (Future Time Limit) was used in the old clamp; now replaced by [T/4, T*5] clamp.
+    // int64_t FTL = static_cast<int64_t>(CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT);
 
     // Return a difficulty of 1 for first 3 blocks if it's the start of the chain.
     if (timestamps.size() < 4) {
@@ -277,7 +278,11 @@ namespace cryptonote {
     // Loop through N most recent blocks. N is most recently solved block.
     for (size_t i = 1; i <= N; i++) {
       solveTime = static_cast<int64_t>(timestamps[i]) - static_cast<int64_t>(timestamps[i - 1]);
-      solveTime = std::min<int64_t>((T * 10), std::max<int64_t>(solveTime, -FTL));
+      // Clamp solvetime to [T/4, T*5] = [30s, 600s] for target=120s.
+      // Upper bound: prevents a single gap (hours without blocks) from collapsing difficulty.
+      // Lower bound: prevents negative/zero solvetimes from inflating difficulty unfairly.
+      // Old bounds were [-FTL=-7200s, T*10=1200s] which still allowed extreme drop after a gap.
+      solveTime = std::min<int64_t>((T * 5), std::max<int64_t>(solveTime, T / 4));
       difficulty = (cumulative_difficulties[i] - cumulative_difficulties[i - 1]).convert_to<uint64_t>();
       LWMA += (int64_t)(solveTime * i) / k;
       sum_inverse_D += 1 / static_cast<double>(difficulty);
@@ -305,7 +310,16 @@ namespace cryptonote {
     // No limits should be employed, but this is correct way to employ a 20% symmetrical limit:
     // nextDifficulty=max(previous_Difficulty*0.8,min(previous_Difficulty/0.8, next_Difficulty));
     next_difficulty = static_cast<uint64_t>(nextDifficulty);
-    
+
+    // Difficulty floor: absolute minimum to prevent runaway block storms at near-zero hashrate.
+    // With target=120s and floor=100, minimum real-world block time ≈ 100/hashrate_H_s.
+    // At 1 H/s: min block time ~100s (close to target, acceptable).
+    // This prevents the difficulty from dropping so low that 1-thread mining produces
+    // blocks every 1-5 seconds, causing alternative storms and peer bans.
+    static const uint64_t DIFFICULTY_MINIMUM_FLOOR = 100;
+    if (next_difficulty < DIFFICULTY_MINIMUM_FLOOR)
+      next_difficulty = DIFFICULTY_MINIMUM_FLOOR;
+
     // std::cout << "======= harmonic_mean_D = " << harmonic_mean_D 
     //           << "\tN = " << N
     //           << "\tsum_inverse_D = " << sum_inverse_D
