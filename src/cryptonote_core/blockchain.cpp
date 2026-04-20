@@ -950,7 +950,11 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
       //    MERROR("Cumulative delta[" << i << "] = " << delta);
       //  }
 
-        diff = next_difficulty_13(timestamps, difficulties, target_pre);
+        // legacy_clamp=true: use original 4.11 solvetime clamp [-FTL, T*10]
+        // Historical blocks 152501..1512399 were mined with that clamp;
+        // re-validating them with the new [T/4, T*5] clamp produces different
+        // difficulties and breaks consensus (the 152887 stall bug).
+        diff = next_difficulty_13(timestamps, difficulties, target_pre, /*legacy_clamp=*/true);
     }
     //if (height >= 152495 && height <= 152505)
       MINFO("diff calc debug: next height " << height
@@ -1410,14 +1414,16 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
 // PATCH: align with 4.11 until HF14 to prevent alt chain divergence
     if(bei.height < HF_HEIGHT_TESLA369_MAINNET)
     {
-      // Pre-HF14: use 4.11 logic
+      // Pre-TESLA369: use 4.11 logic
       if(get_ideal_hard_fork_version(bei.height) < HF_VERSION_NEW_DIFFICULTY_APPLY)
       {
         return next_difficulty(timestamps, cumulative_difficulties, target);
       }
       else
       {
-        return next_difficulty_13(timestamps, cumulative_difficulties, target);
+        // legacy_clamp=true: historical blocks 152501..1512399 were mined with
+        // the original 4.11 solvetime clamp [-FTL, T*10].
+        return next_difficulty_13(timestamps, cumulative_difficulties, target, /*legacy_clamp=*/true);
       }
     }
     else
