@@ -58,9 +58,12 @@ namespace cryptonote
     bool check_hash_128(const crypto::hash &hash, difficulty_type difficulty);
     bool check_hash(const crypto::hash &hash, difficulty_type difficulty);
     difficulty_type next_difficulty(std::vector<std::uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds);
+    // legacy_clamp=true  → original 4.11 solvetime clamp [-FTL, T*10] (for historical blocks 152501..1512399)
+    // legacy_clamp=false → new clamp [T/4, T*5] (for blocks >= HF_HEIGHT_TESLA369)
     difficulty_type next_difficulty_13(std::vector<std::uint64_t> timestamps,
                                    std::vector<difficulty_type> cumulative_difficulties,
-                                   size_t target_seconds);
+                                   size_t target_seconds,
+                                   bool legacy_clamp = false);
 
     std::string hex(difficulty_type v);
 }
