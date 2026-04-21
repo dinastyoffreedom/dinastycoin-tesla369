@@ -45,6 +45,8 @@ else
 endif
 
 all: release-all
+	mkdir -p $(builddir)/release
+	cd $(builddir)/release && cmake -D BUILD_TESTS=ON -D CMAKE_BUILD_TYPE=Release $(topdir) && cmake --build .		     
 
 depends:
 	cd contrib/depends && $(MAKE) HOST=$(target) && cd ../.. && mkdir -p build/$(target)/release
