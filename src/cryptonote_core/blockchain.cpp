@@ -450,9 +450,25 @@ std::tie(difficulty_ok, difficulty_recalc_height) = check_difficulty_checkpoints
 if (!difficulty_ok)
 {
   MERROR("Difficulty drift detected!");
-  MERROR("Fixing difficulty DB (requested) from height " << difficulty_recalc_height
-         << " to height " << (m_db->height() - 1));
-  recalculate_difficulties(difficulty_recalc_height);
+
+  // Find the last checkpoint that has a cumdiff value.
+  // Recalculate only up to (last_cp_with_cumdiff - 1) to avoid
+  // overwriting heights >= HF17 with wrong values from next_difficulty().
+  uint64_t last_cp_with_cumdiff = 0;
+  for (const auto& p : m_checkpoints.get_difficulty_points())
+  {
+    if (p.first < m_db->height())
+      last_cp_with_cumdiff = p.first;
+  }
+
+  uint64_t recalc_end_height = (last_cp_with_cumdiff > 0)
+      ? (last_cp_with_cumdiff - 1)
+      : (m_db->height() - 1);
+
+  MERROR("Fixing difficulty DB from height " << difficulty_recalc_height
+         << " to height " << recalc_end_height
+         << " (last cumdiff checkpoint: " << last_cp_with_cumdiff << ")");
+  recalculate_difficulties(difficulty_recalc_height, recalc_end_height);
 }
 
   {
@@ -936,7 +952,11 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
 
   difficulty_type diff;
 
-  if (height < hf_height_tesla369)
+  // OFF-BY-ONE FIX: h.1512400 is the HF17 activation block itself.
+  // The seed node mined it using the legacy difficulty path (legacy_clamp=true).
+  // Using <= ensures h.1512400 is computed with legacy_clamp=true → diff=225 (matches seed).
+  // The new TESLA369 LWMA path starts from h.1512401 onward.
+  if (height <= hf_height_tesla369)
   {
 
 
@@ -1048,7 +1068,7 @@ std::pair<bool, uint64_t> Blockchain::check_difficulty_checkpoints() const
   return {true, res};
 }
 //------------------------------------------------------------------
-size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_height_opt)
+size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_height_opt, boost::optional<uint64_t> end_height_opt)
 {
   if (m_fixed_difficulty)
   {
@@ -1058,7 +1078,7 @@ size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_heig
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
 
   const uint64_t start_height = start_height_opt ? *start_height_opt : check_difficulty_checkpoints().second;
-  const uint64_t top_height = m_db->height() - 1;
+  const uint64_t top_height = end_height_opt ? *end_height_opt : (m_db->height() - 1);
   MGINFO("Recalculating difficulties from height " << start_height << " to height " << top_height);
 
   std::vector<uint64_t> timestamps;
@@ -1411,8 +1431,9 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
   // calculate the difficulty target for the block and return it
  // return next_difficulty(timestamps, cumulative_difficulties, target);
  // calculate the difficulty target for the block and return it
-// PATCH: align with 4.11 until HF14 to prevent alt chain divergence
-    if(bei.height < HF_HEIGHT_TESLA369_MAINNET)
+// OFF-BY-ONE FIX: same boundary as get_difficulty_for_next_block().
+// h.1512400 uses legacy path (<=), TESLA369 LWMA starts from h.1512401.
+    if(bei.height <= HF_HEIGHT_TESLA369_MAINNET)
     {
       // Pre-TESLA369: use 4.11 logic
       if(get_ideal_hard_fork_version(bei.height) < HF_VERSION_NEW_DIFFICULTY_APPLY)

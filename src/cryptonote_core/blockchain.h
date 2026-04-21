@@ -345,7 +345,7 @@ namespace cryptonote
      *
      * @return number of blocks whose difficulties got corrected
      */
-    size_t recalculate_difficulties(boost::optional<uint64_t> start_height = boost::none);
+    size_t recalculate_difficulties(boost::optional<uint64_t> start_height = boost::none, boost::optional<uint64_t> end_height = boost::none);
 
     /**
      * @brief adds a block to the blockchain
