@@ -279,8 +279,7 @@ namespace cryptonote
          // recalculate_difficulties() will stop at (last_cp_with_cumdiff - 1) = h.1514178, NOT overwriting HF17+ blocks
          ADD_CHECKPOINT2(1514179, "e3c623ebd843cef44e55fa271fd3de710dc4b5c0615150d5f8196cf4147516fd", "0x1dd846712050");
          ADD_CHECKPOINT2(1515219, "c56ee46aa1ab0291217b72bb38ba44080b458a35b1e7d2e78c6d704abd4e8675", "");
-         ADD_CHECKPOINT2(1518738, "9c20ff703df80a169b75f6df54bca323c3754b7b134c9cb9c16b7c3781f457be", "");
-      
+        
          return true;
   }
 
