@@ -34,7 +34,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 #include <boost/format.hpp>
-
+#include "string_tools.h"
 #include "include_base_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "tx_pool.h"
@@ -86,6 +86,7 @@ DISABLE_VS_WARNINGS(4267)
 
 // used to overestimate the block reward when estimating a per kB to use
 #define BLOCK_REWARD_OVERESTIMATE (10 * 1000000000000)
+
 
 //------------------------------------------------------------------
 Blockchain::Blockchain(tx_memory_pool& tx_pool) :
@@ -4248,8 +4249,9 @@ leave:
     else
       proof_of_work = get_block_longhash(this, bl, blockchain_height, 0);
 
+    
     // validate proof_of_work versus difficulty target
-    if(!check_hash(proof_of_work, current_diffic))
+    if(!check_hash(proof_of_work, current_diffic ) ) // && !is_hf17_transition_window) 
     {
       MERROR_VER("Block with id: " << id << std::endl << "does not have enough proof of work: " << proof_of_work << " at height " << blockchain_height << ", unexpected difficulty: " << current_diffic);
       bvc.m_verifivation_failed = true;
@@ -4578,6 +4580,40 @@ leave:
   }
 
   MINFO("+++++ BLOCK SUCCESSFULLY ADDED" << std::endl << "id:\t" << id << std::endl << "PoW:\t" << proof_of_work << std::endl << "HEIGHT " << new_height-1 << ", difficulty:\t" << current_diffic << std::endl << "block reward: " << print_money(fee_summary + base_reward) << "(" << print_money(base_reward) << " + " << print_money(fee_summary) << "), coinbase_weight: " << coinbase_weight << ", cumulative weight: " << cumulative_block_weight << ", " << block_processing_time << "(" << target_calculating_time << "/" << longhash_calculating_time << ")ms");
+  
+  // HF17 fresh-sync repair:
+  // If a fresh sync built wrong cumulative difficulties before HF17,
+  // repair them immediately after block 1514178 is added and before
+  // calculating/caching the next difficulty for block 1514179.
+  if (m_nettype == cryptonote::MAINNET && (new_height - 1) == 1514178)
+  {
+    const uint64_t check_height = 1512400;
+    const difficulty_type expected_cumdiff = 32814651722091; // 0x1dd841a8c96b from gold chain
+    const difficulty_type actual_cumdiff = m_db->get_block_cumulative_difficulty(check_height);
+
+    if (actual_cumdiff != expected_cumdiff)
+    {
+       
+      MINFO("HF17 repair: recalculated cumulative difficulties up to 1514178");
+
+      recalculate_difficulties(0, 1514178);
+
+      // Clear difficulty caches so the next block difficulty is recomputed
+      // from the corrected DB state.
+      m_difficulty_for_next_block_top_hash = crypto::null_hash;
+      m_difficulty_for_next_block = 0;
+      m_timestamps_and_difficulties_height = 0;
+      m_timestamps.clear();
+      m_difficulties.clear();
+
+      MINFO("HF17 fresh-sync repair completed.");
+    }
+    else
+    {
+      MINFO("HF17 fresh-sync repair not needed: cumulative difficulty at 1512400 is already correct.");
+    }
+  }
+  
   if(m_show_time_stats)
   {
     MINFO("Height: " << new_height << " coinbase weight: " << coinbase_weight << " cumm: "
@@ -4592,6 +4628,7 @@ leave:
 
   // appears to be a NOP *and* is called elsewhere.  wat?
   m_tx_pool.on_blockchain_inc(new_height, id);
+
   get_difficulty_for_next_block(); // just to cache it
   invalidate_block_template_cache();
 

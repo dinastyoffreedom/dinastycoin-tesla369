@@ -273,15 +273,16 @@ namespace cryptonote
          ADD_CHECKPOINT2(1455513,  "38c5ebc4d156f30754fa2a76dbeac1def3f370d4069f997153c50dbdeb7916fb", "");  
          ADD_CHECKPOINT2(1480000, "e2ad271829a9f9002cc7390140ebc594bd9864f086ee89b66d6ddb8cccf6a54f", "");
          ADD_CHECKPOINT2(1500000, "b1557ccca36504b6e3153eef788c4f2b0143ff1ea33b31d141865ffbf495d0ba", ""); 
-         // HF17 (TESLA369) activation block — correct cumulative_difficulty from live seed node
-         ADD_CHECKPOINT2(1512400, "76385820657177c29585e155a01e60f2139064e7a60ae03981c2938f0781b74a", "0x1dd8466d7d6b");
+// HF17 (TESLA369) activation block — correct cumulative_difficulty from live seed node
+         ADD_CHECKPOINT2(1512400, "76385820657177c29585e155a01e60f2139064e7a60ae03981c2938f0781b74a", "0x1dd841a8c96b");
          // First block after checkpoints.dat fast-sync boundary — triggers recalculate_difficulties if diverged
          // recalculate_difficulties() will stop at (last_cp_with_cumdiff - 1) = h.1514178, NOT overwriting HF17+ blocks
-         ADD_CHECKPOINT2(1514179, "e3c623ebd843cef44e55fa271fd3de710dc4b5c0615150d5f8196cf4147516fd", "0x1dd846712050");
+         ADD_CHECKPOINT2(1514178, "6573a50fc4b0599dd0f1416176185ceab54f2a593db084a635b2281beb4c45a9", "0x1dd841ac6b39");
+         ADD_CHECKPOINT2(1514179, "e3c623ebd843cef44e55fa271fd3de710dc4b5c0615150d5f8196cf4147516fd", "0x1dd841ac6c50");  
          ADD_CHECKPOINT2(1515219, "c56ee46aa1ab0291217b72bb38ba44080b458a35b1e7d2e78c6d704abd4e8675", "");
-        
+         ADD_CHECKPOINT2(1518738, "430e0ec89eb97bac831cd721fac68ad1233e8525039a5fdca41274f1bbac1171", "");     
          return true;
-  }
+  }         
 
 
 
