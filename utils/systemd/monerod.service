@@ -1,16 +1,16 @@
 [Unit]
-Description=Monero Full Node
+Description=Dinastycoin Full Node
 After=network-online.target
 
 [Service]
-User=monero
-Group=monero
+User=dinastycoin
+Group=dinastycoin
 WorkingDirectory=~
-StateDirectory=monero
-LogsDirectory=monero
+StateDirectory=dinastycoin
+LogsDirectory=dinastycoin
 
 Type=simple
-ExecStart=/usr/bin/monerod --config-file /etc/monerod.conf --non-interactive
+ExecStart=/usr/bin/dinastycoind --config-file /etc/dinastycoin.conf --non-interactive
 StandardOutput=null
 StandardError=null
 

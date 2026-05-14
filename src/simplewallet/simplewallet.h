@@ -53,7 +53,7 @@
 #undef DINASTYCOIN_DEFAULT_LOG_CATEGORY
 #define DINASTYCOIN_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
 // Hardcode Monero's donation address (see #1447)
-constexpr const char MONERO_DONATION_ADDR[] = "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H";
+constexpr const char MONERO_DONATION_ADDR[] = "NYz4vhMey2uhApXHLCF5jBimndXLVD8cm1DvzjESxxvV6YcjX1QxtxS9AtP6acKw9GM36RomJ8Y3oBe2Ts5uaZgu7p3nz9h8Wd";
 
 /*!
  * \namespace cryptonote

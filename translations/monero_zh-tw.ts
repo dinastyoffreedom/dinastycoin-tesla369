@@ -1634,7 +1634,7 @@ Amount, Spent(&quot;T&quot;|&quot;F&quot;), &quot;frozen&quot;|&quot;locked&quot
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3134"/>
-        <source>Donate &lt;amount&gt; to the development team (donate.getmonero.org).</source>
+        <source>Donate &lt;amount&gt; to the development team (dinastycoin.com/donate).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3277,7 +3277,7 @@ Get help about a subcommand with: help mms &lt;subcommand&gt;, or mms help &lt;s
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3444"/>
-        <source>Set or modify authorized signer info (single-word label, transport address, Monero address), or list all signers</source>
+        <source>Set or modify authorized signer info (single-word label, transport address, Dinastycoin address), or list all signers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3530,7 +3530,7 @@ By using &apos;sync&apos; processing of waiting messages with multisig sync info
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4500"/>
-        <source>You are strongly encouraged to connect to the Monero network using your own daemon</source>
+        <source>You are strongly encouraged to connect to the Dinastycoin network using your own daemon</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3545,7 +3545,7 @@ By using &apos;sync&apos; processing of waiting messages with multisig sync info
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4521"/>
-        <source>If you are new to Monero, type &quot;welcome&quot; for a brief overview.</source>
+        <source>If you are new to Dinastycoin, type &quot;welcome&quot; for a brief overview.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3570,7 +3570,7 @@ By using &apos;sync&apos; processing of waiting messages with multisig sync info
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5112"/>
-        <source>Background mining enabled. Thank you for supporting the Monero network.</source>
+        <source>Background mining enabled. Thank you for supporting the Dinastycoin network.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3591,7 +3591,7 @@ By using &apos;sync&apos; processing of waiting messages with multisig sync info
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5181"/>
-        <source>Enabling this supports the network you are using, and makes you eligible for receiving new monero</source>
+        <source>Enabling this supports the network you are using, and makes you eligible for receiving new dinastycoin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3632,7 +3632,7 @@ Input %llu/%llu (%s): amount=%s</source>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6168"/>
-        <source>I locked your Monero wallet to protect you while you were away</source>
+        <source>I locked your Dinastycoin wallet to protect you while you were away</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3674,7 +3674,7 @@ Input %llu/%llu (%s): amount=%s</source>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2285"/>
-        <source>Unlike Bitcoin, your Monero transactions and balance stay private and are not visible to the world by default.</source>
+        <source>Unlike Bitcoin, your Dinastycoin transactions and balance stay private and are not visible to the world by default.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3684,7 +3684,7 @@ Input %llu/%llu (%s): amount=%s</source>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2294"/>
-        <source>Welcome to Monero and financial privacy. For more information see https://GetMonero.org</source>
+        <source>Welcome to Dinastycoin and financial privacy. For more information see https://GetDinastycoin.org</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4010,7 +4010,7 @@ This transaction (including %s change) will unlock on block %llu, in approximate
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10320"/>
-        <source>Monero Address</source>
+        <source>Dinastycoin Address</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4117,17 +4117,17 @@ This transaction (including %s change) will unlock on block %llu, in approximate
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10526"/>
-        <source>mms signer [&lt;number&gt; &lt;label&gt; [&lt;transport_address&gt; [&lt;monero_address&gt;]]]</source>
+        <source>mms signer [&lt;number&gt; &lt;label&gt; [&lt;transport_address&gt; [&lt;dinastycoin_address&gt;]]]</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10545"/>
-        <source>Invalid Monero address</source>
+        <source>Invalid Dinastycoin address</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10552"/>
-        <source>Wallet state does not allow changing Monero addresses anymore</source>
+        <source>Wallet state does not allow changing Dinastycoin addresses anymore</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4506,7 +4506,7 @@ This transaction (including %s change) will unlock on block %llu, in approximate
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7388"/>
-        <source>Donating %s %s to The Monero Project (donate.getmonero.org or %s).</source>
+        <source>Donating %s %s to The Dinastycoin Project (dinastycoin.com/donate or %s).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

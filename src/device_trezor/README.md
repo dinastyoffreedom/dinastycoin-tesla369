@@ -17,7 +17,7 @@ Please, refer to [monero readme](https://github.com/trezor/trezor-firmware/blob/
 
 Trezor uses [Protobuf](https://protobuf.dev/) library.
 
-Monero is now compiled with C++17 by default. If you are getting Trezor compilation errors, it may be caused by abseil (protobuf dependency) not being compiled with C++17.
+Dinastycoin is now compiled with C++17 by default. If you are getting Trezor compilation errors, it may be caused by abseil (protobuf dependency) not being compiled with C++17.
 To fix this try installing protobuf from sources:
 
 ```shell
