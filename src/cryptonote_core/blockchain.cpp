@@ -4641,6 +4641,55 @@ if (m_nettype == cryptonote::MAINNET && (new_height - 1) == 1531436)
     }
 }
 
+if (m_nettype == cryptonote::MAINNET && (new_height - 1) == 1536933)
+{
+    const uint64_t check_height = 1536933;
+    const difficulty_type expected_cumdiff = 32814648976627 ;
+    const difficulty_type actual_cumdiff = m_db->get_block_cumulative_difficulty(check_height);
+
+    if (actual_cumdiff != expected_cumdiff)
+    {
+        MERROR("HF17 second fresh-sync repair triggered after adding height 1536933. "
+               << "Recalculating difficulties from 0 to 1536933. "
+               << "actual_cumdiff_1536933=" << actual_cumdiff
+               << ", expected_cumdiff_1536933=" << expected_cumdiff);
+
+        recalculate_difficulties(0, 1536933);
+
+        m_difficulty_for_next_block_top_hash = crypto::null_hash;
+        m_difficulty_for_next_block = 0;
+        m_timestamps_and_difficulties_height = 0;
+        m_timestamps.clear();
+        m_difficulties.clear();
+
+        MERROR("HF17 seconda fresh-sync repair A completed.");
+    }
+}
+if (m_nettype == cryptonote::MAINNET && (new_height - 1) == 1536983)
+{
+    const uint64_t check_height = 1536983;
+    const difficulty_type expected_cumdiff = 32814649004816 ;
+    const difficulty_type actual_cumdiff = m_db->get_block_cumulative_difficulty(check_height);
+
+    if (actual_cumdiff != expected_cumdiff)
+    {
+        MERROR("HF17 second fresh-sync repair triggered after adding height 1536983. "
+               << "Recalculating difficulties from 0 to 1536983. "
+               << "actual_cumdiff_1536983=" << actual_cumdiff
+               << ", expected_cumdiff_1536983=" << expected_cumdiff);
+
+        recalculate_difficulties(0, 1536983);
+
+        m_difficulty_for_next_block_top_hash = crypto::null_hash;
+        m_difficulty_for_next_block = 0;
+        m_timestamps_and_difficulties_height = 0;
+        m_timestamps.clear();
+        m_difficulties.clear();
+
+        MERROR("HF17 seconda fresh-sync repair A completed.");
+    }
+}
+
  // HF17 second fresh-sync repair:
 // Fixes cumulative difficulty drift before validating block 1531438.
 if (m_nettype == cryptonote::MAINNET && (new_height - 1) == 1531437)
