@@ -4238,27 +4238,65 @@ leave:
     }
   }
 #endif
-  if (!fast_check)
-  {
+   if (!fast_check)
+{
     auto it = m_blocks_longhash_table.find(id);
     if (it != m_blocks_longhash_table.end())
     {
-      precomputed = true;
-      proof_of_work = it->second;
+        precomputed = true;
+        proof_of_work = it->second;
     }
     else
-      proof_of_work = get_block_longhash(this, bl, blockchain_height, 0);
-
-    
-    // validate proof_of_work versus difficulty target
-    if(!check_hash(proof_of_work, current_diffic ) ) // && !is_hf17_transition_window) 
     {
-      MERROR_VER("Block with id: " << id << std::endl << "does not have enough proof of work: " << proof_of_work << " at height " << blockchain_height << ", unexpected difficulty: " << current_diffic);
-      bvc.m_verifivation_failed = true;
-      bvc.m_bad_pow = true;
-      goto leave;
+        proof_of_work = get_block_longhash(this, bl, blockchain_height, 0);
     }
-  }
+
+    // validate proof_of_work versus difficulty target
+    bool pow_ok = check_hash(proof_of_work, current_diffic);
+
+    const bool allow_auto_difficulty_repair =
+        m_nettype == cryptonote::MAINNET &&
+        blockchain_height >= 1512400 &&
+        blockchain_height <= 1900000;
+
+    if (!pow_ok && allow_auto_difficulty_repair && blockchain_height > 0)
+    {
+        const uint64_t repair_height = blockchain_height - 1;
+
+        MERROR("AUTO DIFF REPAIR: PoW failed at height "
+               << blockchain_height
+               << " with difficulty " << current_diffic
+               << ". Recalculating difficulties from 0 to "
+               << repair_height);
+
+        recalculate_difficulties(0, repair_height);
+
+        m_difficulty_for_next_block_top_hash = crypto::null_hash;
+        m_difficulty_for_next_block = 0;
+        m_timestamps_and_difficulties_height = 0;
+        m_timestamps.clear();
+        m_difficulties.clear();
+
+        current_diffic = get_difficulty_for_next_block();
+
+        MERROR("AUTO DIFF REPAIR: after recalculation, difficulty for height "
+               << blockchain_height << " is " << current_diffic);
+
+        pow_ok = check_hash(proof_of_work, current_diffic);
+    }
+
+    if (!pow_ok)
+    {
+        MERROR_VER("Block with id: " << id << std::endl
+                   << "does not have enough proof of work: " << proof_of_work
+                   << " at height " << blockchain_height
+                   << ", unexpected difficulty: " << current_diffic);
+
+        bvc.m_verifivation_failed = true;
+        bvc.m_bad_pow = true;
+        goto leave;
+    }
+}
 
   // If we're at a checkpoint, ensure that our hardcoded checkpoint hash
   // is correct.
