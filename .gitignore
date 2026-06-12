@@ -3,6 +3,8 @@
 /build
 /tags
 log/
+.clinerules/
+memory-bank/
 
 # vim swap files
 *.swp
