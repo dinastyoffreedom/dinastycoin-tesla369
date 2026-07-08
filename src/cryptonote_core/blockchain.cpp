@@ -59,6 +59,7 @@
 #include "common/pruning.h"
 #include "common/data_cache.h"
 #include "time_helper.h"
+#include <atomic>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "blockchain"
@@ -1462,7 +1463,42 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
         cumulative_difficulties.erase(cumulative_difficulties.begin(),
                                       cumulative_difficulties.begin() + excess);
       }
-      return next_difficulty_13(timestamps, cumulative_difficulties, target);
+       
+    difficulty_type diff = next_difficulty_13(timestamps, cumulative_difficulties, target);
+
+    // Same retarget rate-limit used by get_difficulty_for_next_block()
+    if (cumulative_difficulties.size() >= 2)
+    {
+      const difficulty_type prev_block_diff =
+          cumulative_difficulties.back() - cumulative_difficulties[cumulative_difficulties.size() - 2];
+
+      if (prev_block_diff > 0)
+      {
+        const difficulty_type max_allowed = prev_block_diff + prev_block_diff / 2;
+        const difficulty_type min_allowed = (prev_block_diff > 1) ? (prev_block_diff / 2) : 1;
+
+        if (diff > max_allowed)
+        {
+          MWARNING("ALT Retarget rate-limit (upper): height=" << bei.height
+                  << " raw_diff=" << diff
+                  << " capped to " << max_allowed
+                  << " (prev_block_diff=" << prev_block_diff << ")");
+          diff = max_allowed;
+        }
+
+        if (diff < min_allowed)
+        {
+          MWARNING("ALT Retarget rate-limit (lower): height=" << bei.height
+                  << " raw_diff=" << diff
+                  << " raised to " << min_allowed
+                  << " (prev_block_diff=" << prev_block_diff << ")");
+          diff = min_allowed;
+        }
+      }
+    }
+
+   return diff;
+
     }
 
 }
@@ -2148,7 +2184,19 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     }
     if(!check_hash(proof_of_work, current_diff))
     {
-      MERROR_VER("Block with id: " << id << std::endl << " for alternative chain, does not have enough proof of work: " << proof_of_work << std::endl << " expected difficulty: " << current_diff);
+       MERROR_VER("ALT CHAIN REJECTED: bad proof of work"
+      << std::endl
+      << "Block id: " << id
+      << std::endl
+      << "Height: " << bei.height
+      << std::endl
+      << "PoW: " << proof_of_work
+      << std::endl
+      << "Expected difficulty: " << current_diff
+      << std::endl
+      << "Action: rejected, no difficulty repair on alternative chain");
+
+      
       bvc.m_verifivation_failed = true;
       bvc.m_bad_pow = true;
       return false;
@@ -4252,39 +4300,78 @@ leave:
     }
 
     // validate proof_of_work versus difficulty target
-    bool pow_ok = check_hash(proof_of_work, current_diffic);
+ bool pow_ok = check_hash(proof_of_work, current_diffic);
 
-    const bool allow_auto_difficulty_repair =
-        m_nettype == cryptonote::MAINNET &&
-        blockchain_height >= 1512400 &&
-        blockchain_height <= 1900000;
+static std::atomic<bool> auto_diff_repair_running(false);
+static std::atomic<uint64_t> last_auto_diff_repair_height(0);
 
-    if (!pow_ok && allow_auto_difficulty_repair && blockchain_height > 0)
+const bool allow_auto_difficulty_repair =
+    m_nettype == cryptonote::MAINNET &&
+    blockchain_height >= 1512400 &&
+    blockchain_height <= 1900000;
+
+if (!pow_ok && allow_auto_difficulty_repair && blockchain_height > 0)
+{
+    const uint64_t repair_height = blockchain_height - 1;
+
+    if (auto_diff_repair_running.exchange(true))
     {
-        const uint64_t repair_height = blockchain_height - 1;
-
-        MERROR("AUTO DIFF REPAIR: PoW failed at height "
-               << blockchain_height
-               << " with difficulty " << current_diffic
-               << ". Recalculating difficulties from 0 to "
-               << repair_height);
-
-        recalculate_difficulties(0, repair_height);
-
-        m_difficulty_for_next_block_top_hash = crypto::null_hash;
-        m_difficulty_for_next_block = 0;
-        m_timestamps_and_difficulties_height = 0;
-        m_timestamps.clear();
-        m_difficulties.clear();
-
-        current_diffic = get_difficulty_for_next_block();
-
-        MERROR("AUTO DIFF REPAIR: after recalculation, difficulty for height "
-               << blockchain_height << " is " << current_diffic);
-
-        pow_ok = check_hash(proof_of_work, current_diffic);
+        MERROR("AUTO DIFF REPAIR: already running, skip duplicate attempt at height "
+               << blockchain_height);
     }
+    else if (repair_height <= last_auto_diff_repair_height.load())
+    {
+        MERROR("AUTO DIFF REPAIR: already attempted up to height "
+               << last_auto_diff_repair_height.load()
+               << ", not repeating for block " << blockchain_height);
 
+        auto_diff_repair_running = false;
+    }
+    else
+    {
+        try
+        {
+            const difficulty_type old_diffic = current_diffic;
+
+            MERROR("AUTO DIFF REPAIR: PoW failed at height "
+                   << blockchain_height
+                   << " with difficulty " << old_diffic
+                   << ". Recalculating difficulties from 0 to "
+                   << repair_height);
+
+            recalculate_difficulties(0, repair_height);
+
+            last_auto_diff_repair_height = repair_height;
+
+            m_difficulty_for_next_block_top_hash = crypto::null_hash;
+            m_difficulty_for_next_block = 0;
+            m_timestamps_and_difficulties_height = 0;
+            m_timestamps.clear();
+            m_difficulties.clear();
+
+            current_diffic = get_difficulty_for_next_block();
+
+            MERROR("AUTO DIFF REPAIR: after recalculation, difficulty for height "
+                   << blockchain_height << " is " << current_diffic);
+
+            pow_ok = check_hash(proof_of_work, current_diffic);
+
+            if (!pow_ok && current_diffic == old_diffic)
+            {
+                MERROR("AUTO DIFF REPAIR FAILED: difficulty unchanged after recalc. "
+                       << "Local LMDB may be inconsistent; refusing to loop.");
+            }
+        }
+        catch (const std::exception& e)
+        {
+            MERROR("AUTO DIFF REPAIR EXCEPTION: " << e.what());
+        }
+
+        auto_diff_repair_running = false;
+    }
+}
+    
+    //******************* */
     if (!pow_ok)
     {
         MERROR_VER("Block with id: " << id << std::endl
