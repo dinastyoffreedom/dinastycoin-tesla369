@@ -225,7 +225,7 @@ pkg install git gmake cmake pkgconf boost-libs libzmq4 libsodium unbound
 Clone recursively to pull-in needed submodule(s):
 
 ```
-git clone --recursive https://github.com/Dinastycoin/dinastycoin-tesla369.git
+git clone --recursive https://github.com/Dinastyoffreedom/dinastycoin-tesla369.git
 ```
 
 If you already have a repo cloned, initialize and update:
@@ -319,7 +319,7 @@ Tested on a Raspberry Pi 5B with a clean installation of Raspberry Pi OS (64-bit
 * Clone Dinastycoin and checkout the most recent release version:
 
     ```bash
-    git clone --recursive https://github.com/Dinastycoin/dianstycoin-tesla369.git
+    git clone --recursive https://github.com/dinastyoffreedom/dianstycoin-tesla369.git
     cd Dinastycoin
     git checkout v0.18.4.1
     ```
