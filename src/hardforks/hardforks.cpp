@@ -69,6 +69,8 @@ const hardfork_t mainnet_hard_forks[] = {
   // added harfork 14  // which is on or around the 1th of June, 2022. 
   { 14, 550000, 0, 1654089255 },
  { 17, 1512400, 0, 1767225600 },
+  // HF18 TESLA369 v2 emergency difficulty and timestamp fix.
+  { 18, 1605000, 0, 1785110400 },
 };
 const size_t num_mainnet_hard_forks = sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]);
 const uint64_t mainnet_hard_fork_version_1_till = 19;
@@ -89,7 +91,8 @@ const hardfork_t testnet_hard_forks[] = {
 // includi HF14 (anche se non cambia difficulty) per coerenza col mainnet
   { 14, 2400, 0, 1654089255 },
   // il  big-bang: TESLA369 (Monero stable) a height vicino
-  { 17,  3000,  0, 1767225600 },
+  { 17, 3000, 0, 1767225600 },
+  { 18, 3100, 0, 1785110400 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = 19;
@@ -115,5 +118,6 @@ const hardfork_t stagenet_hard_forks[] = {
   { 15, 1151000, 0, 1656629117 },
   { 16, 1151720, 0, 1656629118 },
   { 17, 2, 0, 1767225600 },
+  { 18, 3, 0, 1785110400 },
 };
 const size_t num_stagenet_hard_forks = sizeof(stagenet_hard_forks) / sizeof(stagenet_hard_forks[0]);

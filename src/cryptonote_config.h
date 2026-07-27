@@ -47,6 +47,10 @@
 #define CURRENT_BLOCK_MAJOR_VERSION                     1
 #define CURRENT_BLOCK_MINOR_VERSION                     0
 #define CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT              60*60*2
+// HF18: maximum accepted future timestamp is five minutes.
+// The historical two-hour limit remains unchanged for blocks before HF18.
+#define CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT_V18          60*5
+
 #define CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE             10
 
 #define BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW               60
@@ -172,7 +176,7 @@
 
 #define THREAD_STACK_SIZE                       5 * 1024 * 1024
 
-// dinsatycoins hardforks, for reference
+// dinastycoins hardforks, for reference
 #define HF_VERSION_DYNAMIC_FEE                  4
 #define HF_VERSION_MIN_MIXIN_4                  6
 #define HF_VERSION_MIN_MIXIN_6                  7
@@ -202,10 +206,17 @@
 
 // Dinastycoin's new hardfork
 #define HF_VERSION_TESLA369                     17
-#define HF_HEIGHT_TESLA369_MAINNET 1512400
-#define HF_HEIGHT_TESLA369_TESTNET 200
-#define HF_HEIGHT_TESLA369_STAGENET 200
-#define HF_HEIGHT_NEW_DIFFICULTY_APPLY 152500
+#define HF_HEIGHT_TESLA369_MAINNET              1512400
+#define HF_HEIGHT_TESLA369_TESTNET              3000
+#define HF_HEIGHT_TESLA369_STAGENET             2
+
+// HF18: TESLA369 v2 emergency consensus fix.
+#define HF_VERSION_TESLA369_V2                  18
+#define HF_HEIGHT_TESLA369_V2_MAINNET           1605000
+#define HF_HEIGHT_TESLA369_V2_TESTNET           3100
+#define HF_HEIGHT_TESLA369_V2_STAGENET          3
+
+#define HF_HEIGHT_NEW_DIFFICULTY_APPLY           152500
 
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8

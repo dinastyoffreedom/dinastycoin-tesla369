@@ -895,12 +895,29 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
   ++height;
 
   uint64_t hf_height_tesla369 = 0;
+  uint64_t hf_height_tesla369_v2 = 0;
+
   switch (m_nettype)
   {
-    case cryptonote::MAINNET: hf_height_tesla369 = HF_HEIGHT_TESLA369_MAINNET; break;
-    case cryptonote::TESTNET: hf_height_tesla369 = HF_HEIGHT_TESLA369_TESTNET; break;
-    case cryptonote::STAGENET: hf_height_tesla369 = HF_HEIGHT_TESLA369_STAGENET; break;
-    default: hf_height_tesla369 = HF_HEIGHT_TESLA369_MAINNET; break;
+    case cryptonote::MAINNET:
+      hf_height_tesla369 = HF_HEIGHT_TESLA369_MAINNET;
+      hf_height_tesla369_v2 = HF_HEIGHT_TESLA369_V2_MAINNET;
+      break;
+
+    case cryptonote::TESTNET:
+      hf_height_tesla369 = HF_HEIGHT_TESLA369_TESTNET;
+      hf_height_tesla369_v2 = HF_HEIGHT_TESLA369_V2_TESTNET;
+      break;
+
+    case cryptonote::STAGENET:
+      hf_height_tesla369 = HF_HEIGHT_TESLA369_STAGENET;
+      hf_height_tesla369_v2 = HF_HEIGHT_TESLA369_V2_STAGENET;
+      break;
+
+    default:
+      hf_height_tesla369 = HF_HEIGHT_TESLA369_MAINNET;
+      hf_height_tesla369_v2 = HF_HEIGHT_TESLA369_V2_MAINNET;
+      break;
   }
 
   // Pre-TESLA369: Dinastycoin historical behavior (4.11 compatible)
@@ -987,9 +1004,9 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
 
             
   }
-  else
+  else if (height < hf_height_tesla369_v2)
   {
-    // TESLA369+: use LWMA (next_difficulty_13) for stability.
+    // HF17 TESLA369: preserve the existing consensus algorithm.
     // ROOT CAUSE FIX: the old next_difficulty algo is designed for a 720-block window;
     // when called with only DIFFICULTY_BLOCKS_COUNT_V13=31 entries it produces extreme
     // volatility (spike 3381 → collapse 87 → block storm 1-5s). LWMA handles short
@@ -1036,6 +1053,71 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
           << ", timestamps " << timestamps.size()
           << ", diffs " << difficulties.size()
           << ", diff " << diff);
+  }
+
+  else
+  {
+    // HF18 TESLA369 v2.
+    //
+    // Activation block HF_HEIGHT_TESLA369_V2_* and all following blocks
+    // use the sanitized LWMA implementation.
+    const uint8_t hf_ideal = get_ideal_hard_fork_version(height);
+    const size_t target_post =
+        (hf_ideal < 2) ? DIFFICULTY_TARGET_V1 : DIFFICULTY_TARGET_V2;
+
+    diff = next_difficulty_18(
+        timestamps,
+        difficulties,
+        target_post);
+
+    // HF18 asymmetric per-block limiter:
+    // maximum increase: 25%
+    // maximum decrease: 15%
+    if (difficulties.size() >= 2)
+    {
+      const difficulty_type previous =
+          difficulties.back() -
+          difficulties[difficulties.size() - 2];
+
+      if (previous > 0)
+      {
+        const difficulty_type maximum =
+            previous + previous / 4;
+
+        const difficulty_type minimum =
+            previous - previous * 15 / 100;
+
+        if (diff > maximum)
+        {
+          MWARNING("HF18 retarget upper limit: height="
+                   << height
+                   << " raw_diff=" << diff
+                   << " capped_to=" << maximum
+                   << " previous=" << previous);
+
+          diff = maximum;
+        }
+
+        if (diff < minimum)
+        {
+          MWARNING("HF18 retarget lower limit: height="
+                   << height
+                   << " raw_diff=" << diff
+                   << " raised_to=" << minimum
+                   << " previous=" << previous);
+
+          diff = minimum;
+        }
+      }
+    }
+
+    MINFO("HF18 difficulty: next_height="
+          << height
+          << ", hf_ideal=" << static_cast<int>(hf_ideal)
+          << ", target=" << target_post
+          << ", timestamps=" << timestamps.size()
+          << ", difficulties=" << difficulties.size()
+          << ", result=" << diff);
   }
 
   //if (height >= 152495 && height <= 152505)
@@ -1432,75 +1514,153 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
 
   // calculate the difficulty target for the block and return it
  // return next_difficulty(timestamps, cumulative_difficulties, target);
- // calculate the difficulty target for the block and return it
-// OFF-BY-ONE FIX: same boundary as get_difficulty_for_next_block().
-// h.1512400 uses legacy path (<=), TESLA369 LWMA starts from h.1512401.
-    if(bei.height <= HF_HEIGHT_TESLA369_MAINNET)
-    {
-      // Pre-TESLA369: use 4.11 logic
-      if(get_ideal_hard_fork_version(bei.height) < HF_VERSION_NEW_DIFFICULTY_APPLY)
-      {
-        return next_difficulty(timestamps, cumulative_difficulties, target);
-      }
-      else
-      {
-        // legacy_clamp=true: historical blocks 152501..1512399 were mined with
-        // the original 4.11 solvetime clamp [-FTL, T*10].
-        return next_difficulty_13(timestamps, cumulative_difficulties, target, /*legacy_clamp=*/true);
-      }
-    }
-    else
-    {
-      // Post-TESLA369: use LWMA (next_difficulty_13) for stability (mirrors fix in get_difficulty_for_next_block).
-      // The old next_difficulty is designed for a 720-block window; with DIFFICULTY_BLOCKS_COUNT_V13=31
-      // entries it produces extreme volatility. Trim vectors to the last 31 entries (most recent),
-      // since next_difficulty_13 internally resizes keeping the FIRST entries, not the last.
-      const size_t lwma_count = static_cast<size_t>(DIFFICULTY_BLOCKS_COUNT_V13);
-      if (timestamps.size() > lwma_count)
-      {
-        const size_t excess = timestamps.size() - lwma_count;
-        timestamps.erase(timestamps.begin(), timestamps.begin() + excess);
-        cumulative_difficulties.erase(cumulative_difficulties.begin(),
-                                      cumulative_difficulties.begin() + excess);
-      }
-       
-    difficulty_type diff = next_difficulty_13(timestamps, cumulative_difficulties, target);
+ // Select network-specific consensus activation heights.
+  uint64_t hf_height_tesla369 = 0;
+  uint64_t hf_height_tesla369_v2 = 0;
 
-    // Same retarget rate-limit used by get_difficulty_for_next_block()
+  switch (m_nettype)
+  {
+    case cryptonote::MAINNET:
+      hf_height_tesla369 = HF_HEIGHT_TESLA369_MAINNET;
+      hf_height_tesla369_v2 = HF_HEIGHT_TESLA369_V2_MAINNET;
+      break;
+
+    case cryptonote::TESTNET:
+      hf_height_tesla369 = HF_HEIGHT_TESLA369_TESTNET;
+      hf_height_tesla369_v2 = HF_HEIGHT_TESLA369_V2_TESTNET;
+      break;
+
+    case cryptonote::STAGENET:
+      hf_height_tesla369 = HF_HEIGHT_TESLA369_STAGENET;
+      hf_height_tesla369_v2 = HF_HEIGHT_TESLA369_V2_STAGENET;
+      break;
+
+    default:
+      hf_height_tesla369 = HF_HEIGHT_TESLA369_MAINNET;
+      hf_height_tesla369_v2 = HF_HEIGHT_TESLA369_V2_MAINNET;
+      break;
+  }
+
+  // Historical blocks through the HF17 activation block.
+  if (bei.height <= hf_height_tesla369)
+  {
+    if (get_ideal_hard_fork_version(bei.height) <
+        HF_VERSION_NEW_DIFFICULTY_APPLY)
+    {
+      return next_difficulty(
+          timestamps,
+          cumulative_difficulties,
+          target);
+    }
+
+    return next_difficulty_13(
+        timestamps,
+        cumulative_difficulties,
+        target,
+        /*legacy_clamp=*/true);
+  }
+
+  // The LWMA functions retain the first entries when resizing.
+  // Supply the most recent observations explicitly.
+  const size_t lwma_count =
+      static_cast<size_t>(DIFFICULTY_BLOCKS_COUNT_V13);
+
+  if (timestamps.size() > lwma_count)
+  {
+    const size_t excess =
+        timestamps.size() - lwma_count;
+
+    timestamps.erase(
+        timestamps.begin(),
+        timestamps.begin() + excess);
+
+    cumulative_difficulties.erase(
+        cumulative_difficulties.begin(),
+        cumulative_difficulties.begin() + excess);
+  }
+
+  difficulty_type diff;
+
+  if (bei.height < hf_height_tesla369_v2)
+  {
+    // HF17 alternative-chain consensus.
+    diff = next_difficulty_13(
+        timestamps,
+        cumulative_difficulties,
+        target);
+
     if (cumulative_difficulties.size() >= 2)
     {
-      const difficulty_type prev_block_diff =
-          cumulative_difficulties.back() - cumulative_difficulties[cumulative_difficulties.size() - 2];
+      const difficulty_type previous =
+          cumulative_difficulties.back() -
+          cumulative_difficulties[
+              cumulative_difficulties.size() - 2];
 
-      if (prev_block_diff > 0)
+      if (previous > 0)
       {
-        const difficulty_type max_allowed = prev_block_diff + prev_block_diff / 2;
-        const difficulty_type min_allowed = (prev_block_diff > 1) ? (prev_block_diff / 2) : 1;
+        const difficulty_type maximum =
+            previous + previous / 2;
 
-        if (diff > max_allowed)
-        {
-          MWARNING("ALT Retarget rate-limit (upper): height=" << bei.height
-                  << " raw_diff=" << diff
-                  << " capped to " << max_allowed
-                  << " (prev_block_diff=" << prev_block_diff << ")");
-          diff = max_allowed;
-        }
+        const difficulty_type minimum =
+            previous > 1 ? previous / 2 : 1;
 
-        if (diff < min_allowed)
-        {
-          MWARNING("ALT Retarget rate-limit (lower): height=" << bei.height
-                  << " raw_diff=" << diff
-                  << " raised to " << min_allowed
-                  << " (prev_block_diff=" << prev_block_diff << ")");
-          diff = min_allowed;
-        }
+        if (diff > maximum)
+          diff = maximum;
+
+        if (diff < minimum)
+          diff = minimum;
       }
     }
 
-   return diff;
+    return diff;
+  }
 
+  // HF18 alternative-chain consensus.
+  diff = next_difficulty_18(
+      timestamps,
+      cumulative_difficulties,
+      target);
+
+  if (cumulative_difficulties.size() >= 2)
+  {
+    const difficulty_type previous =
+        cumulative_difficulties.back() -
+        cumulative_difficulties[
+            cumulative_difficulties.size() - 2];
+
+    if (previous > 0)
+    {
+      const difficulty_type maximum =
+          previous + previous / 4;
+
+      const difficulty_type minimum =
+          previous - previous * 15 / 100;
+
+      if (diff > maximum)
+      {
+        MWARNING("HF18 ALT retarget upper limit: height="
+                 << bei.height
+                 << " raw_diff=" << diff
+                 << " capped_to=" << maximum
+                 << " previous=" << previous);
+
+        diff = maximum;
+      }
+
+      if (diff < minimum)
+      {
+        MWARNING("HF18 ALT retarget lower limit: height="
+                 << bei.height
+                 << " raw_diff=" << diff
+                 << " raised_to=" << minimum
+                 << " previous=" << previous);
+
+        diff = minimum;
+      }
     }
+  }
 
+  return diff;
 }
 //------------------------------------------------------------------
 // This function does a sanity check on basic things that all miner
@@ -4128,13 +4288,56 @@ bool Blockchain::check_block_timestamp(std::vector<uint64_t>& timestamps, const 
 bool Blockchain::check_block_timestamp(const block& b, uint64_t& median_ts) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  if(b.timestamp > (uint64_t)time(NULL) + CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT)
+
+  // m_db->height() is the height of the candidate block currently
+  // being validated.
+  const uint64_t h = m_db->height();
+
+  uint64_t hf_height_tesla369_v2 = 0;
+
+  switch (m_nettype)
   {
-    MERROR_VER("Timestamp of block with id: " << get_block_hash(b) << ", " << b.timestamp << ", bigger than local time + 2 hours");
-    return false;
+    case cryptonote::MAINNET:
+      hf_height_tesla369_v2 =
+          HF_HEIGHT_TESLA369_V2_MAINNET;
+      break;
+
+    case cryptonote::TESTNET:
+      hf_height_tesla369_v2 =
+          HF_HEIGHT_TESLA369_V2_TESTNET;
+      break;
+
+    case cryptonote::STAGENET:
+      hf_height_tesla369_v2 =
+          HF_HEIGHT_TESLA369_V2_STAGENET;
+      break;
+
+    default:
+      hf_height_tesla369_v2 =
+          HF_HEIGHT_TESLA369_V2_MAINNET;
+      break;
   }
 
-  const auto h = m_db->height();
+  const uint64_t future_time_limit =
+      h >= hf_height_tesla369_v2
+          ? static_cast<uint64_t>(
+                CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT_V18)
+          : static_cast<uint64_t>(
+                CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT);
+
+  const uint64_t local_time =
+      static_cast<uint64_t>(time(NULL));
+
+  if (b.timestamp > local_time + future_time_limit)
+  {
+    MERROR_VER("Timestamp of block with id: "
+               << get_block_hash(b)
+               << ", timestamp=" << b.timestamp
+               << ", local_time=" << local_time
+               << ", future_limit=" << future_time_limit
+               << ", candidate_height=" << h);
+    return false;
+  }
 
   // if not enough blocks, no proper median yet, return true
   if(h < BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW)
