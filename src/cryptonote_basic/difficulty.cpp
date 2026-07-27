@@ -40,6 +40,7 @@
 #include "crypto/hash.h"
 #include "cryptonote_config.h"
 #include "difficulty.h"
+#include <limits>
 
 #undef DINASTYCOIN_DEFAULT_LOG_CATEGORY
 #define DINASTYCOIN_DEFAULT_LOG_CATEGORY "difficulty"
@@ -243,7 +244,7 @@ namespace cryptonote {
 
   //added code for hardfork 13
   difficulty_type next_difficulty_13(std::vector<uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds, bool legacy_clamp) {
-    //  std::cout  << "timestamps size = " << timestamps.size() 
+    //  std::cout  << "timestamps size = " << timestamps.size()
     //             << "cumulative_difficulties size = " << cumulative_difficulties.size()
     //             << std::endl;
 
@@ -292,9 +293,9 @@ namespace cryptonote {
       difficulty = (cumulative_difficulties[i] - cumulative_difficulties[i - 1]).convert_to<uint64_t>();
       LWMA += (int64_t)(solveTime * i) / k;
       sum_inverse_D += 1 / static_cast<double>(difficulty);
-      
-      // std::cout << "======= i = " << i 
-      //     << "\ttimestamps[i] = " << timestamps[i] 
+
+      // std::cout << "======= i = " << i
+      //     << "\ttimestamps[i] = " << timestamps[i]
       //     << "\ttimestamps[i-1]= " << timestamps[i-1]
       //     << "\tSolveTime = " << solveTime
       //     << "\tcumulative_difficulties[i] = " << cumulative_difficulties[i]
@@ -326,7 +327,7 @@ namespace cryptonote {
     if (next_difficulty < DIFFICULTY_MINIMUM_FLOOR)
       next_difficulty = DIFFICULTY_MINIMUM_FLOOR;
 
-    // std::cout << "======= harmonic_mean_D = " << harmonic_mean_D 
+    // std::cout << "======= harmonic_mean_D = " << harmonic_mean_D
     //           << "\tN = " << N
     //           << "\tsum_inverse_D = " << sum_inverse_D
     //           << "\tLWMA = " << LWMA
@@ -344,145 +345,186 @@ namespace cryptonote {
   // - prevent negative, zero and excessively large solvetimes;
   // - prevent a future timestamp from contaminating the following LWMA window;
   // - retain the established LWMA/harmonic-mean structure.
-  difficulty_type next_difficulty_18(
-      std::vector<uint64_t> timestamps,
-      std::vector<difficulty_type> cumulative_difficulties,
-      size_t target_seconds)
+   // HF18 TESLA369 v2 difficulty algorithm.
+//
+// Consensus goals:
+// - preserve all historical HF17 calculations;
+// - prevent negative, zero and excessively large solvetimes;
+// - prevent abnormal timestamps from excessively influencing the LWMA window;
+// - retain the established LWMA/harmonic-mean structure.
+difficulty_type next_difficulty_18(
+    std::vector<uint64_t> timestamps,
+    std::vector<difficulty_type> cumulative_difficulties,
+    size_t target_seconds)
+{
+  static const difficulty_type DIFFICULTY_MINIMUM_FLOOR = 100;
+
+  const int64_t T = static_cast<int64_t>(target_seconds);
+  size_t N = DIFFICULTY_WINDOW_V13;
+
+  if (T <= 0)
+    return 1;
+
+  if (timestamps.size() != cumulative_difficulties.size())
+    return 1;
+
+  // The first three blocks do not provide enough observations for LWMA.
+  if (timestamps.size() < 4)
+    return 1;
+
+  if (timestamps.size() < N + 1)
   {
-    const int64_t T = static_cast<int64_t>(target_seconds);
-    size_t N = DIFFICULTY_WINDOW_V13;
+    N = timestamps.size() - 1;
+  }
+  else
+  {
+    // Preserve the same input-window handling used by next_difficulty_13().
+    // The caller supplies the relevant entries in consensus order.
+    timestamps.resize(N + 1);
+    cumulative_difficulties.resize(N + 1);
+  }
 
-    if (T <= 0)
-      return 1;
+  if (N == 0)
+    return 1;
 
-    if (timestamps.size() != cumulative_difficulties.size())
-      return 1;
+  const double adjust = 0.998;
 
-    // The first three blocks do not provide enough observations for LWMA.
-    if (timestamps.size() < 4)
-      return 1;
+  const double k =
+      static_cast<double>(N) *
+      static_cast<double>(N + 1) /
+      2.0;
 
-    if (timestamps.size() < N + 1)
+  double lwma = 0.0;
+  double sum_inverse_difficulty = 0.0;
+
+  /*
+   * Sanitize every observed solvetime independently.
+   *
+   * Each interval is bounded to:
+   *
+   *     minimum: T / 4
+   *     maximum: T * 5
+   *
+   * Negative, zero and excessively large intervals are therefore prevented
+   * from producing an invalid or disproportionate contribution to the LWMA.
+   */
+  const int64_t min_solvetime =
+      std::max<int64_t>(1, T / 4);
+
+  const int64_t max_solvetime =
+      std::max<int64_t>(min_solvetime, T * 5);
+
+  for (size_t i = 1; i <= N; ++i)
+  {
+    int64_t raw_solvetime;
+
+    if (timestamps[i] >= timestamps[i - 1])
     {
-      N = timestamps.size() - 1;
+      const uint64_t raw_delta =
+          timestamps[i] - timestamps[i - 1];
+
+      raw_solvetime =
+          raw_delta > static_cast<uint64_t>(INT64_MAX)
+              ? INT64_MAX
+              : static_cast<int64_t>(raw_delta);
     }
     else
     {
-      // The caller must provide the most recent entries first or trim the
-      // vectors before calling. This preserves next_difficulty_13 behaviour.
-      timestamps.resize(N + 1);
-      cumulative_difficulties.resize(N + 1);
+      raw_solvetime = -1;
     }
 
-    if (N == 0)
-      return 1;
+    const int64_t sanitized_solvetime =
+        std::min<int64_t>(
+            max_solvetime,
+            std::max<int64_t>(
+                raw_solvetime,
+                min_solvetime));
 
-    const double adjust = 0.998;
-    const double k = static_cast<double>(N) *
-                     static_cast<double>(N + 1) / 2.0;
-
-    double lwma = 0.0;
-    double sum_inverse_difficulty = 0.0;
-
-    /*
-     * Build a synthetic monotonic timeline.
-     *
-     * Each interval is bounded to:
-     *
-     *     minimum: T / 4
-     *     maximum: T * 5
-     *
-     * Unlike merely clamping a subtraction after the fact, this normalized
-     * timeline prevents one far-future timestamp from shifting the reference
-     * point used for all subsequent observations.
-     */
-    std::vector<uint64_t> adjusted_timestamps(timestamps.size());
-    adjusted_timestamps[0] = timestamps[0];
-
-    const int64_t min_solvetime = std::max<int64_t>(1, T / 4);
-    const int64_t max_solvetime = std::max<int64_t>(min_solvetime, T * 5);
-
-    for (size_t i = 1; i <= N; ++i)
+    if (cumulative_difficulties[i] <=
+        cumulative_difficulties[i - 1])
     {
-      int64_t raw_solvetime;
-
-      if (timestamps[i] >= timestamps[i - 1])
-      {
-        const uint64_t raw_delta = timestamps[i] - timestamps[i - 1];
-
-        raw_solvetime =
-            raw_delta > static_cast<uint64_t>(INT64_MAX)
-                ? INT64_MAX
-                : static_cast<int64_t>(raw_delta);
-      }
-      else
-      {
-        raw_solvetime = -1;
-      }
-
-      const int64_t sanitized_solvetime =
-          std::min<int64_t>(
-              max_solvetime,
-              std::max<int64_t>(raw_solvetime, min_solvetime));
-
-      adjusted_timestamps[i] =
-          adjusted_timestamps[i - 1] +
-          static_cast<uint64_t>(sanitized_solvetime);
-
-      if (cumulative_difficulties[i] <= cumulative_difficulties[i - 1])
-        return 1;
-
-      const difficulty_type block_difficulty =
-          cumulative_difficulties[i] -
-          cumulative_difficulties[i - 1];
-
-      const double block_difficulty_double =
-          block_difficulty.convert_to<double>();
-
-      if (block_difficulty_double <= 0.0)
-        return 1;
-
-      lwma +=
-          (static_cast<double>(sanitized_solvetime) *
-           static_cast<double>(i)) / k;
-
-      sum_inverse_difficulty +=
-          1.0 / block_difficulty_double;
+      return 1;
     }
 
-    if (sum_inverse_difficulty <= 0.0)
+    const difficulty_type block_difficulty =
+        cumulative_difficulties[i] -
+        cumulative_difficulties[i - 1];
+
+    const double block_difficulty_double =
+        block_difficulty.convert_to<double>();
+
+    if (!std::isfinite(block_difficulty_double) ||
+        block_difficulty_double <= 0.0)
+    {
       return 1;
+    }
 
-    if (lwma < static_cast<double>(min_solvetime))
-      lwma = static_cast<double>(min_solvetime);
+    lwma +=
+        (static_cast<double>(sanitized_solvetime) *
+         static_cast<double>(i)) /
+        k;
 
-    const double harmonic_mean_difficulty =
-        static_cast<double>(N) / sum_inverse_difficulty;
-
-    const double calculated =
-        harmonic_mean_difficulty *
-        static_cast<double>(T) /
-        lwma *
-        adjust;
-
-    if (calculated <= 0.0)
-      return 100;
-
-    difficulty_type next =
-        static_cast<uint64_t>(calculated);
-
-    // Absolute consensus floor retained from TESLA369 HF17.
-    static const difficulty_type DIFFICULTY_MINIMUM_FLOOR = 100;
-
-    if (next < DIFFICULTY_MINIMUM_FLOOR)
-      next = DIFFICULTY_MINIMUM_FLOOR;
-
-    return next;
+    sum_inverse_difficulty +=
+        1.0 / block_difficulty_double;
   }
 
-//end
+  if (!std::isfinite(sum_inverse_difficulty) ||
+      sum_inverse_difficulty <= 0.0)
+  {
+    return 1;
+  }
 
- 
+  if (!std::isfinite(lwma) ||
+      lwma < static_cast<double>(min_solvetime))
+  {
+    lwma = static_cast<double>(min_solvetime);
+  }
+
+  const double harmonic_mean_difficulty =
+      static_cast<double>(N) /
+      sum_inverse_difficulty;
+
+  if (!std::isfinite(harmonic_mean_difficulty) ||
+      harmonic_mean_difficulty <= 0.0)
+  {
+    return DIFFICULTY_MINIMUM_FLOOR;
+  }
+
+  const double calculated =
+      harmonic_mean_difficulty *
+      static_cast<double>(T) /
+      lwma *
+      adjust;
+
+  if (!std::isfinite(calculated) || calculated <= 0.0)
+    return DIFFICULTY_MINIMUM_FLOOR;
+
+  /*
+   * Avoid converting a floating-point value outside the uint64_t range.
+   * The external HF18 rate limiter will subsequently apply the permitted
+   * increase cap relative to the previous difficulty.
+   */
+  const double maximum_uint64 =
+      static_cast<double>(
+          std::numeric_limits<uint64_t>::max());
+
+  difficulty_type next;
+
+  if (calculated >= maximum_uint64)
+  {
+    next = std::numeric_limits<uint64_t>::max();
+  }
+  else
+  {
+    next = static_cast<uint64_t>(calculated);
+  }
+
+  if (next < DIFFICULTY_MINIMUM_FLOOR)
+    next = DIFFICULTY_MINIMUM_FLOOR;
+
+  return next;
+}
+
 
   std::string hex(difficulty_type v)
   {
