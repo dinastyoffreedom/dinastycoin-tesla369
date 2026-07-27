@@ -65,5 +65,13 @@ namespace cryptonote
                                    size_t target_seconds,
                                    bool legacy_clamp = false);
 
+    // HF18 TESLA369 v2:
+    // sanitizes every solvetime before the LWMA calculation so malformed,
+    // repeated or future timestamps cannot contaminate the retarget window.
+    difficulty_type next_difficulty_18(
+                                   std::vector<std::uint64_t> timestamps,
+                                   std::vector<difficulty_type> cumulative_difficulties,
+                                   size_t target_seconds);
+
     std::string hex(difficulty_type v);
 }
